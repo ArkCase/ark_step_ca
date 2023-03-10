@@ -13,14 +13,15 @@ ARG APP_GROUP="${APP_USER}"
 ARG APP_GID="${APP_UID}"
 ARG HOME="/home/${APP_USER}"
 ARG BASE_REGISTRY
-ARG BASE_IMAGE="${BASE_REGISTRY}/arkcase/base:8.7.0"
+ARG BASE_REPO="arkcase/base"
+ARG BASE_TAG="8.7.0"
 
 FROM "${SRC_IMAGE}" as src
 
 #
 # For actual execution
 #
-FROM "${BASE_IMAGE}"
+FROM "${BASE_REGISTRY}/${BASE_REPO}:${BASE_TAG}"
 
 #
 # Basic Parameters
