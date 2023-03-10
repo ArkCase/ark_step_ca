@@ -12,13 +12,14 @@ ARG APP_UID="1000"
 ARG APP_GROUP="${APP_USER}"
 ARG APP_GID="${APP_UID}"
 ARG HOME="/home/${APP_USER}"
+ARG BASE_IMAGE="207428623785.dkr.ecr.us-east-1.amazonaws.com/arkcase/base:8.7.0"
 
 FROM "${SRC_IMAGE}" as src
 
 #
 # For actual execution
 #
-FROM 345280441424.dkr.ecr.ap-south-1.amazonaws.com/ark_base:latest
+FROM "${BASE_IMAGE}"
 
 #
 # Basic Parameters
