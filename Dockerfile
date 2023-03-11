@@ -16,6 +16,9 @@ ARG BASE_REGISTRY
 ARG BASE_REPO="arkcase/base"
 ARG BASE_TAG="8.7.0"
 
+#
+# For artifact copying
+#
 FROM "${SRC_IMAGE}" as src
 
 #
