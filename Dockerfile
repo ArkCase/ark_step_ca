@@ -5,13 +5,11 @@ ARG ARCH="x86_64"
 ARG OS="linux"
 ARG VER="0.23.2"
 ARG PKG="step-ca"
-ARG ROCKY_VERSION="8.7"
 ARG SRC_IMAGE="smallstep/step-ca:${VER}"
 ARG APP_USER="step"
 ARG APP_UID="1000"
 ARG APP_GROUP="${APP_USER}"
 ARG APP_GID="${APP_UID}"
-ARG HOME="/home/${APP_USER}"
 ARG BASE_REGISTRY
 ARG BASE_REPO="arkcase/base"
 ARG BASE_TAG="8.7.0"
@@ -37,7 +35,6 @@ ARG APP_USER
 ARG APP_UID
 ARG APP_GROUP
 ARG APP_GID
-ARG HOME
 
 #
 # Some important labels
@@ -51,7 +48,7 @@ RUN yum -y install epel-release yum-utils && \
     yum -y update && \
     yum -y clean all
 
-ENV HOME="${HOME}"
+ENV HOME="/home/${APP_USER}"
 ENV STEP="${HOME}"
 ENV STEPPATH="${STEP}"
 ENV CONFIGPATH="${STEPPATH}/config/ca.json"
