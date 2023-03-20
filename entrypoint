@@ -65,6 +65,9 @@ function step_ca_init () {
 	fi
 	step ca init "${SETUP_ARGS[@]}"
 
+	NOT_BEFORE="$(date -Isec -u)"
+	NOT_AFTER="$(date -d "5 years" -Isec -u)"
+
 	echo "👉 Creating a stronger root CA..."
 	# TODO: Get the CN from the original CA to substitute here?
 	OUT="$(
@@ -73,6 +76,8 @@ function step_ca_init () {
 			--kty RSA \
 			--size 4096 \
 			--force \
+			--not-before="${NOT_BEFORE}" \
+			--not-after="${NOT_AFTER}" \
 			--password-file "${STEPPATH}/password" \
 			"${DOCKER_STEPCA_INIT_NAME} Root CA" \
 			"${STEPPATH}/certs/root_ca.crt" "${STEPPATH}/secrets/root_ca_key"
@@ -92,6 +97,8 @@ function step_ca_init () {
 			--kty RSA \
 			--size 4096 \
 			--force \
+			--not-before="${NOT_BEFORE}" \
+			--not-after="${NOT_AFTER}" \
 			--password-file "${STEPPATH}/password" \
 			--ca "${STEPPATH}/certs/root_ca.crt" \
 			--ca-key "${STEPPATH}/secrets/root_ca_key" \
