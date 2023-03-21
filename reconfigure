@@ -40,4 +40,8 @@ if ! step ca provisioner update admin --x509-max-dur="${DOCKER_STEPCA_INIT_X509_
 	echo "❌ Failed to reconfigure the X509 duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
 fi
 
+# TODO: Other reconfigurations?
+
+echo "👉 Signaling the step-ca process (pid=${STEP_PID})"
+kill -HUP "${STEP_PID}" || echo "❌ Failed to send the HUP signal to the step-ca process (pid ${STEP_PID})"
 echo "👉 Reconfiguration complete!"
