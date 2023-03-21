@@ -127,10 +127,13 @@ function step_ca_init () {
 }
 
 [ -f /usr/sbin/pcscd ] && /usr/sbin/pcscd
-[ -f "${CONFIGPATH}" ] || init_if_possible
 
-# Start the reconfiguration script
-( "${BASEDIR}/reconfigure" $$ & disown ) &>/dev/null
+if [ ! -f "${CONFIGPATH}" ] ; then
+	init_if_possible
+
+	# Start the reconfiguration script
+	"${BASEDIR}/reconfigure" $$ & disown
+fi
 
 # Launch the daemon
 exec /usr/local/bin/step-ca --password-file "${PWDPATH}" "${CONFIGPATH}"
