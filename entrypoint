@@ -1,4 +1,8 @@
 #!/bin/bash
+SCRIPT="$(readlink -f "${BASH_SOURCE:-${0}}")"
+BASEDIR="$(dirname "${SCRIPT}")"
+SCRIPT="$(basename "${SCRIPT}")"
+
 set -eo pipefail
 
 # Paraphrased from:
@@ -14,15 +18,14 @@ declare -ra REQUIRED_INIT_VARS=(DOCKER_STEPCA_INIT_NAME DOCKER_STEPCA_INIT_DNS_N
 
 # Ensure all env vars required to run step ca init are set.
 function init_if_possible () {
-	local MISSING="false"
 	for VAR in "${REQUIRED_INIT_VARS[@]}"; do
-		[ -v "${VAR}" ] || MISSING="true"
+		[ -v "${VAR}" ] && continue
+		>&2 echo "there is no config file at [${CONFIGPATH}]; please run step ca init, or provide config parameters via DOCKER_STEPCA_INIT_ vars"
+		return 1
 	done
-	if "${MISSING}" ; then
-		>&2 echo "there is no ca.json config file; please run step ca init, or provide config parameters via DOCKER_STEPCA_INIT_ vars"
-	else
-		step_ca_init "${@}"
-	fi
+
+	# Everything is available for initialization
+	step_ca_init "${@}"
 }
 
 function generate_password () {
@@ -124,6 +127,10 @@ function step_ca_init () {
 }
 
 [ -f /usr/sbin/pcscd ] && /usr/sbin/pcscd
-[ -f "${STEPPATH}/config/ca.json" ] || init_if_possible
+[ -f "${CONFIGPATH}" ] || init_if_possible
 
+# Start the reconfiguration script
+( "${BASEDIR}/reconfigure" $$ & disown ) &>/dev/null
+
+# Launch the daemon
 exec /usr/local/bin/step-ca --password-file "${PWDPATH}" "${CONFIGPATH}"
