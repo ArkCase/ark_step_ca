@@ -59,9 +59,13 @@ RUN groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
 
 WORKDIR "${HOME}"
 
-COPY --from=src /usr/local/bin/step-ca /usr/local/bin
-COPY --from=src /usr/local/bin/step-kms-plugin /usr/local/bin
-COPY --from=src /usr/local/bin/step /usr/local/bin
+#
+# Copy the required executables
+#
+COPY --from=src /usr/local/bin/step-ca \
+                /usr/local/bin/step-kms-plugin \
+                /usr/local/bin/step \
+                /usr/local/bin/
 
 #
 # Declare some important volumes
