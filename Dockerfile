@@ -1,28 +1,32 @@
 #
 # Basic Parameters
 #
+ARG PUBLIC_REGISTRY="public.ecr.aws"
+ARG BASE_REPO="arkcase/base"
+ARG BASE_TAG="8.7.0"
 ARG ARCH="x86_64"
 ARG OS="linux"
 ARG VER="0.23.2"
 ARG PKG="step-ca"
-ARG SRC_IMAGE="smallstep/step-ca:${VER}"
+ARG SRC_IMAGE="smallstep/step-ca"
 ARG APP_USER="step"
 ARG APP_UID="1000"
 ARG APP_GROUP="${APP_USER}"
 ARG APP_GID="${APP_UID}"
-ARG BASE_REGISTRY
-ARG BASE_REPO="arkcase/base"
-ARG BASE_TAG="8.7.0"
 
 #
 # For artifact copying
 #
-FROM "${SRC_IMAGE}" as src
+FROM "${SRC_IMAGE}:${VER}" as src
+
+ARG PUBLIC_REGISTRY
+ARG BASE_REPO
+ARG BASE_TAG
 
 #
 # For actual execution
 #
-FROM "${BASE_REGISTRY}/${BASE_REPO}:${BASE_TAG}"
+FROM "${PUBLIC_REGISTRY}/${BASE_REPO}:${BASE_TAG}"
 
 #
 # Basic Parameters
