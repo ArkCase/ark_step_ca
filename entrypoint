@@ -96,9 +96,14 @@ function step_ca_init () {
 		--provisioner-password-file "${STEPPATH}/provisioner_password"
 		--address "${DOCKER_STEPCA_INIT_ADDRESS}"
 	)
-	if [ -n "${DOCKER_STEPCA_INIT_PASSWORD}" ]; then
-		echo "${DOCKER_STEPCA_INIT_PASSWORD}" > "${STEPPATH}/password"
-		echo "${DOCKER_STEPCA_INIT_PASSWORD}" > "${STEPPATH}/provisioner_password"
+	if [ -v DOCKER_STEPCA_INIT_PASSWORD_FILE ] ; then
+		if [ ! -s "${DOCKER_STEPCA_INIT_PASSWORD_FILE}" ] ; then
+			>&2 echo "❌ The password file at [${DOCKER_STEPCA_INIT_PASSWORD_FILE}] may not be empty."
+			return 1
+		fi
+		cat "${DOCKER_STEPCA_INIT_PASSWORD_FILE}" | tee "${STEPPATH}/password" > "${STEPPATH}/provisioner_password"
+	elif [ -n "${DOCKER_STEPCA_INIT_PASSWORD}" ]; then
+		echo -n "${DOCKER_STEPCA_INIT_PASSWORD}" | tee "${STEPPATH}/password" > "${STEPPATH}/provisioner_password"
 	else
 		generate_password > "${STEPPATH}/password"
 		generate_password > "${STEPPATH}/provisioner_password"
