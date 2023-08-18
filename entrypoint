@@ -16,13 +16,60 @@ export PWDPATH="${STEPPATH}/secrets/password"
 # List of env vars required for step ca init
 declare -ra REQUIRED_INIT_VARS=(DOCKER_STEPCA_INIT_NAME DOCKER_STEPCA_INIT_DNS_NAMES)
 
+if [ ! -v DOCKER_STEPCA_INIT_DNS_NAMES ] || [ "${DOCKER_STEPCA_INIT_DNS_NAMES,,}" == "<auto>" ] ; then
+
+	# Unset this in case we were explicitly told to autocompute them
+	[ -v DOCKER_STEPCA_INIT_DNS_NAMES ] && unset DOCKER_STEPCA_INIT_DNS_NAMES
+
+	# We weren't given names, so compute them
+	if [ -v KUBERNETES_SERVICE_HOST ] ; then
+		# We're in K8s, so proceed accordingly
+		FQDN="$(/usr/bin/hostname -f)"
+		IFS="." read POD SERVICE NAMESPACE SVC CLUSTER_DOMAIN <<< "${FQDN}"
+
+		[ -v SERVICE_NAME ] || SERVICE_NAME="${SERVICE}"
+
+		NAMES=("localhost" "localhost.localdomain")
+		while read SVC ; do
+			[ -n "${NAMESPACE}" ] && [ -n "${CLUSTER_DOMAIN}" ] && NAMES+=("${SVC}.${NAMESPACE}.svc.${CLUSTER_DOMAIN}")
+			[ -n "${NAMESPACE}" ] && NAMES+=("${SVC}.${NAMESPACE}")
+			NAMES+=("${SVC}")
+		done < <(echo -e "${SERVICE}\n${SERVICE_NAME}" | sort -u | sed -e '/^\s*$/d')
+
+		[ ${#NAMES[@]} -gt 2 ] || NAMES+=("$(hostname -s)")
+
+		DOCKER_STEPCA_INIT_DNS_NAMES=""
+		for N in "${NAMES[@]}" ; do
+			[ -n "${DOCKER_STEPCA_INIT_DNS_NAMES}" ] && DOCKER_STEPCA_INIT_DNS_NAMES+=","
+			DOCKER_STEPCA_INIT_DNS_NAMES+="${N}"
+		done
+		[ -n "${DOCKER_STEPCA_INIT_DNS_NAMES}" ] || unset DOCKER_STEPCA_INIT_DNS_NAMES
+	else
+		FQDN="$(hostname -f)"
+		HN="$(hostname -s)"
+		[ "${HN}" == "${FQDN}" ] || FQDN="${FQDN},${HN}"
+		DOCKER_STEPCA_INIT_DNS_NAMES="localhost,localhost.localdomain,${FQDN}"
+	fi
+
+	if [ -n "${DOCKER_STEPCA_INIT_DNS_NAMES}" ] ; then
+		echo "👉 Computed DOCKER_STEPCA_INIT_DNS_NAMES=[${DOCKER_STEPCA_INIT_DNS_NAMES}]"
+	else
+		unset DOCKER_STEPCA_INIT_DNS_NAMES
+	fi
+fi
+
 # Ensure all env vars required to run step ca init are set.
 function init_if_possible () {
+
+	local FAILED=()
 	for VAR in "${REQUIRED_INIT_VARS[@]}"; do
-		[ -v "${VAR}" ] && continue
-		>&2 echo "there is no config file at [${CONFIGPATH}]; please run step ca init, or provide config parameters via DOCKER_STEPCA_INIT_ vars"
-		return 1
+		[ -v "${VAR}" ] || FAILED+=("${VAR}")
 	done
+
+	if [ ${#FAILED[@]} -gt 0 ] ; then
+		>&2 echo "❌ There is no config file at [${CONFIGPATH}]; please run step ca init, or provide values for these variables: ${FAILED[@]}"
+		return 1
+	fi
 
 	# Everything is available for initialization
 	step_ca_init "${@}"
