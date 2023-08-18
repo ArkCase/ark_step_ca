@@ -183,4 +183,4 @@ if [ ! -f "${CONFIGPATH}" ] ; then
 fi
 
 # Launch the daemon
-exec /usr/local/bin/step-ca --password-file "${PWDPATH}" "${CONFIGPATH}"
+exec /usr/bin/step-ca --password-file "${PWDPATH}" "${CONFIGPATH}"
