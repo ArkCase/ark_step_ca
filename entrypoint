@@ -3,6 +3,12 @@ SCRIPT="$(readlink -f "${BASH_SOURCE:-${0}}")"
 BASEDIR="$(dirname "${SCRIPT}")"
 SCRIPT="$(basename "${SCRIPT}")"
 
+join_array() {
+	local IFS="${1}"
+	shift
+	echo "$*"
+}
+
 set -eo pipefail
 
 # Paraphrased from:
@@ -23,26 +29,56 @@ if [ ! -v DOCKER_STEPCA_INIT_DNS_NAMES ] || [ "${DOCKER_STEPCA_INIT_DNS_NAMES,,}
 
 	# We weren't given names, so compute them
 	if [ -v KUBERNETES_SERVICE_HOST ] ; then
+
 		# We're in K8s, so proceed accordingly
 		FQDN="$(/usr/bin/hostname -f)"
 		IFS="." read POD SERVICE NAMESPACE SVC CLUSTER_DOMAIN <<< "${FQDN}"
 
-		[ -v SERVICE_NAME ] || SERVICE_NAME="${SERVICE}"
+		NAMES=()
 
-		NAMES=("localhost" "localhost.localdomain")
-		while read SVC ; do
-			[ -n "${NAMESPACE}" ] && [ -n "${CLUSTER_DOMAIN}" ] && NAMES+=("${SVC}.${NAMESPACE}.svc.${CLUSTER_DOMAIN}")
-			[ -n "${NAMESPACE}" ] && NAMES+=("${SVC}.${NAMESPACE}")
-			NAMES+=("${SVC}")
-		done < <(echo -e "${SERVICE}\n${SERVICE_NAME}" | sort -u | sed -e '/^\s*$/d')
+		# DOCKER_STEPCA_INIT_SERVICE_NAME is the "consumable" service,
+		# while SERVICE is the (possibly headless) default service
+		# associated to a pod. They *may* be the same but aren't
+		# required to be. Thus, we check to see if they're the same,
+		# to avoid adding duplicate values
+		[ -v DOCKER_STEPCA_INIT_SERVICE_NAME ] || DOCKER_STEPCA_INIT_SERVICE_NAME="${SERVICE}"
+		if [ "${DOCKER_STEPCA_INIT_SERVICE_NAME}" != "${SERVICE}" ] ; then
+			if [ -n "${NAMESPACE}" ] ; then
+				if [ -n "${CLUSTER_DOMAIN}" ] ; then
+					[ -n "${FQSN}" ] || FQSN="${DOCKER_STEPCA_INIT_SERVICE_NAME}.${NAMESPACE}.svc.${CLUSTER_DOMAIN}"
+					NAMES+=("${FQSN}")
+				fi
+				NAMES+=("${DOCKER_STEPCA_INIT_SERVICE_NAME}.${NAMESPACE}")
+			fi
+			NAMES+=("${DOCKER_STEPCA_INIT_SERVICE_NAME}")
+		fi
 
-		[ ${#NAMES[@]} -gt 2 ] || NAMES+=("$(hostname -s)")
+		if [ -n "${SERVICE}" ] ; then
+			NAMES+=(
+				"${POD}.${SERVICE}"
+				"${SERVICE}"
+			)
+			if [ -n "${NAMESPACE}" ] ; then
+				if [ -n "${CLUSTER_DOMAIN}" ] ; then
+					[ -n "${FQSN}" ] || FQSN="${SERVICE}.${NAMESPACE}.svc.${CLUSTER_DOMAIN}"
+					NAMES+=(
+						"${POD}.${SERVICE}.${NAMESPACE}.svc.${CLUSTER_DOMAIN}"
+						"${SERVICE}.${NAMESPACE}.svc.${CLUSTER_DOMAIN}"
+					)
+				fi
+				NAMES+=(
+					"${POD}.${SERVICE}.${NAMESPACE}"
+					"${SERVICE}.${NAMESPACE}"
+				)
+			fi
+		fi
+		NAMES+=(
+			"${POD}"
+			"localhost.localdomain"
+			"localhost"
+		)
 
-		DOCKER_STEPCA_INIT_DNS_NAMES=""
-		for N in "${NAMES[@]}" ; do
-			[ -n "${DOCKER_STEPCA_INIT_DNS_NAMES}" ] && DOCKER_STEPCA_INIT_DNS_NAMES+=","
-			DOCKER_STEPCA_INIT_DNS_NAMES+="${N}"
-		done
+		DOCKER_STEPCA_INIT_DNS_NAMES="$(join_array "," "${NAMES[@]}")"
 		[ -n "${DOCKER_STEPCA_INIT_DNS_NAMES}" ] || unset DOCKER_STEPCA_INIT_DNS_NAMES
 	else
 		FQDN="$(hostname -f)"
