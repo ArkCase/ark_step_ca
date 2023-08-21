@@ -45,7 +45,6 @@ LABEL APP="Step-CA"
 LABEL VERSION="${VER}"
 
 RUN yum -y install epel-release yum-utils && \
-    yum -y update && \
     yum -y install \
         "${STEP_SRC}" \
         "${STEP_KMS_SRC}" \
