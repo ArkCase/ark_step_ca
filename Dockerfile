@@ -3,10 +3,11 @@
 #
 ARG PUBLIC_REGISTRY="public.ecr.aws"
 ARG BASE_REPO="arkcase/base"
-ARG BASE_TAG="8.8-01"
+ARG BASE_TAG="8.8-02"
 ARG ARCH="x86_64"
 ARG OS="linux"
 ARG VER="0.24.2"
+ARG BLD="01"
 ARG PKG="step-ca"
 ARG SRC_IMAGE="smallstep/step-ca"
 ARG APP_USER="step"
