@@ -2,26 +2,27 @@
 # Basic Parameters
 #
 ARG PUBLIC_REGISTRY="public.ecr.aws"
-ARG BASE_REPO="arkcase/base"
-ARG BASE_TAG="8-02"
 ARG ARCH="x86_64"
 ARG OS="linux"
 ARG VER="0.24.2"
-ARG BLD="01"
 ARG PKG="step-ca"
-ARG SRC_IMAGE="smallstep/step-ca"
 ARG APP_USER="step"
 ARG APP_UID="1000"
 ARG APP_GROUP="${APP_USER}"
 ARG APP_GID="${APP_UID}"
+
 ARG STEP_SRC="https://github.com/smallstep/certificates/releases/download/v${VER}/step-ca_${VER}_amd64.rpm"
 ARG STEP_KMS_VER="0.9.1"
 ARG STEP_KMS_SRC="https://github.com/smallstep/step-kms-plugin/releases/download/v${STEP_KMS_VER}/step-kms-plugin_${STEP_KMS_VER}_amd64.rpm"
 
+ARG BASE_REPO="arkcase/base"
+ARG BASE_VER="8"
+ARG BASE_IMG="${PUBLIC_REGISTRY}/${BASE_REPO}:${BASE_VER}"
+
 #
 # For actual execution
 #
-FROM "${PUBLIC_REGISTRY}/${BASE_REPO}:${BASE_TAG}"
+FROM "${BASE_IMG}"
 
 #
 # Basic Parameters
