@@ -40,6 +40,31 @@ export STEPPATH="$(step path)"
 export CONFIGPATH="${STEPPATH}/config/ca.json"
 export PWDPATH="${STEPPATH}/secrets/password"
 
+if [ -f "${PWDPATH}" ] ; then
+	# Make sure our existing password exactly matches our
+	# incoming password. If they don't, then we must nuke
+	# the existing configurations so we can create new ones
+	# using this new password. Or, perhaps, change the existing
+	# certificate's password?
+	read OLD_PASSWORD REST < <(/usr/bin/sha256sum "${PWDPATH}")
+
+	if [ -v DOCKER_STEPCA_INIT_PASSWORD_FILE ] ; then
+		read NEW_PASSWORD REST < <(/usr/bin/sha256sum "${DOCKER_STEPCA_INIT_PASSWORD_FILE}")
+	elif [ -v DOCKER_STEPCA_INIT_PASSWORD ]; then
+		read NEW_PASSWORD REST < <(echo -n "${DOCKER_STEPCA_INIT_PASSWORD}" | /usr/bin/sha256sum)
+	fi
+
+	if [ "${NEW_PASSWORD:-""}" != "${OLD_PASSWORD}" ] ; then
+		echo "⚠️ The incoming password and the existing password don't match, the configuration must be re-initialized"
+		/usr/bin/find "${STEPPATH}" -delete &>/dev/null || true
+		FILES="$(/usr/bin/find "${STEPPATH}" -type f | /usr/bin/wc -l)"
+		if [ "${FILES}" -gt 0 ] ; then
+			>&2 echo "❌ Failed to clear out the existing data at [${STEPPATH}] ... please remove it manually."
+			exit 1
+		fi
+	fi
+fi
+
 # List of env vars required for step ca init
 declare -ra REQUIRED_INIT_VARS=(DOCKER_STEPCA_INIT_NAME DOCKER_STEPCA_INIT_DNS_NAMES)
 
@@ -146,13 +171,6 @@ function init_if_possible () {
 	step_ca_init "${@}"
 }
 
-function generate_password () {
-	set +o pipefail
-	< /dev/urandom tr -dc A-Za-z0-9 | head -c40
-	echo
-	set -o pipefail
-}
-
 # Initialize a CA if not already initialized
 function step_ca_init () {
 	DOCKER_STEPCA_INIT_PROVISIONER_NAME="${DOCKER_STEPCA_INIT_PROVISIONER_NAME:-admin}"
@@ -173,11 +191,15 @@ function step_ca_init () {
 			return 1
 		fi
 		cat "${DOCKER_STEPCA_INIT_PASSWORD_FILE}" | tee "${STEPPATH}/password" > "${STEPPATH}/provisioner_password"
-	elif [ -n "${DOCKER_STEPCA_INIT_PASSWORD}" ]; then
+	elif [ -v DOCKER_STEPCA_INIT_PASSWORD ]; then
+		if [ -z "${DOCKER_STEPCA_INIT_PASSWORD}" ]; then
+			>&2 echo "❌ The password from [${DOCKER_STEPCA_INIT_PASSWORD}] may not be empty."
+			return 1
+		fi
 		echo -n "${DOCKER_STEPCA_INIT_PASSWORD}" | tee "${STEPPATH}/password" > "${STEPPATH}/provisioner_password"
 	else
-		generate_password > "${STEPPATH}/password"
-		generate_password > "${STEPPATH}/provisioner_password"
+		>&2 echo "❌ Must provide a pre-set password using either DOCKER_STEPCA_INIT_PASSWORD or DOCKER_STEPCA_INIT_PASSWORD_FILE"
+		return 1
 	fi
 	if [ "${DOCKER_STEPCA_INIT_SSH}" == "true" ]; then
 		SETUP_ARGS+=(--ssh)

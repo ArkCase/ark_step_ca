@@ -7,13 +7,13 @@ STEP_PID="${1}"
 
 # We wait until it's up an listening, for up to 90 seconds, and we also
 # keep watch to see if it crashes
-START="$(date +%s)"
+START="$(/usr/bin/date +%s)"
 MAX_WAIT="90"
 echo "👉 Waiting for the daemon to complete its startup (for up to ${MAX_WAIT} seconds)..."
 while true ; do
 
 	# If it's up, end the poll
-	curl -kL https://localhost:9000/root.pem &>/dev/null && break
+	/usr/bin/curl -kL https://localhost:9000/root.pem &>/dev/null && break
 
 	# It's not up ... is it still running?
 	if ! kill -0 "${STEP_PID}" &>/dev/null ; then
@@ -23,7 +23,7 @@ while true ; do
 	fi
 
 	# It's not up yet, but still running ... have we timed out?
-	NOW="$(date +%s)"
+	NOW="$(/usr/bin/date +%s)"
 	if [ $(( NOW - START )) -ge 90 ] ; then
 		echo "❌ The step-ca daemon did not start after ${MAX_WAIT} seconds, failing"
 		exit 1
@@ -36,7 +36,7 @@ echo "👉 Daemon is up!"
 
 [ -v DOCKER_STEPCA_INIT_X509_DURATION ] || DOCKER_STEPCA_INIT_X509_DURATION="13140h"
 echo "👉 Reconfiguring the default provisioner's certificate duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
-if ! step ca provisioner update admin --x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" --x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" ; then
+if ! /usr/bin/step ca provisioner update admin --x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" --x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" ; then
 	echo "❌ Failed to reconfigure the X509 duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
 fi
 
