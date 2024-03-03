@@ -3,6 +3,24 @@ SCRIPT="$(readlink -f "${BASH_SOURCE:-${0}}")"
 BASEDIR="$(dirname "${SCRIPT}")"
 SCRIPT="$(basename "${SCRIPT}")"
 
+set -eo pipefail
+
+timestamp()
+{
+	/usr/bin/date -Ins
+}
+
+say()
+{
+	echo -e "$(timestamp): ${@}"
+}
+
+fail()
+{
+	say "❌ ${@}" 1>&2
+	exit ${EXIT_CODE:-1}
+}
+
 join_array() {
 	local IFS="${1}"
 	shift
@@ -30,8 +48,6 @@ validate_ip() {
 	return 0
 }
 
-set -eo pipefail
-
 # Paraphrased from:
 # https://github.com/influxdata/influxdata-docker/blob/0d341f18067c4652dfa8df7dcb24d69bf707363d/influxdb/2.0/entrypoint.sh
 # (a repo with no LICENSE.md)
@@ -55,13 +71,10 @@ if [ -f "${PWDPATH}" ] ; then
 	fi
 
 	if [ "${NEW_PASSWORD:-""}" != "${OLD_PASSWORD}" ] ; then
-		echo "⚠️ The incoming password and the existing password don't match, the configuration must be re-initialized"
+		say "⚠️ The incoming password and the existing password don't match, the configuration must be re-initialized"
 		/usr/bin/find "${STEPPATH}" -delete &>/dev/null || true
 		FILES="$(/usr/bin/find "${STEPPATH}" -type f | /usr/bin/wc -l)"
-		if [ "${FILES}" -gt 0 ] ; then
-			>&2 echo "❌ Failed to clear out the existing data at [${STEPPATH}] ... please remove it manually."
-			exit 1
-		fi
+		[ "${FILES}" -le 0 ] || fail "Failed to clear out the existing data at [${STEPPATH}] ... please remove it manually."
 	fi
 fi
 
@@ -148,7 +161,7 @@ if [ ! -v DOCKER_STEPCA_INIT_DNS_NAMES ] || [ "${DOCKER_STEPCA_INIT_DNS_NAMES,,}
 	fi
 
 	if [ -n "${DOCKER_STEPCA_INIT_DNS_NAMES}" ] ; then
-		echo "👉 Computed DOCKER_STEPCA_INIT_DNS_NAMES=[${DOCKER_STEPCA_INIT_DNS_NAMES}]"
+		say "👉 Computed DOCKER_STEPCA_INIT_DNS_NAMES=[${DOCKER_STEPCA_INIT_DNS_NAMES}]"
 	else
 		unset DOCKER_STEPCA_INIT_DNS_NAMES
 	fi
@@ -162,10 +175,7 @@ function init_if_possible () {
 		[ -v "${VAR}" ] || FAILED+=("${VAR}")
 	done
 
-	if [ ${#FAILED[@]} -gt 0 ] ; then
-		>&2 echo "❌ There is no config file at [${CONFIGPATH}]; please run step ca init, or provide values for these variables: ${FAILED[@]}"
-		return 1
-	fi
+	[ ${#FAILED[@]} -le 0 ] || fail "There is no config file at [${CONFIGPATH}]; please run step ca init, or provide values for these variables: ${FAILED[@]}"
 
 	# Everything is available for initialization
 	step_ca_init "${@}"
@@ -186,20 +196,13 @@ function step_ca_init () {
 		--address "${DOCKER_STEPCA_INIT_ADDRESS}"
 	)
 	if [ -v DOCKER_STEPCA_INIT_PASSWORD_FILE ] ; then
-		if [ ! -s "${DOCKER_STEPCA_INIT_PASSWORD_FILE}" ] ; then
-			>&2 echo "❌ The password file at [${DOCKER_STEPCA_INIT_PASSWORD_FILE}] may not be empty."
-			return 1
-		fi
+		[ -s "${DOCKER_STEPCA_INIT_PASSWORD_FILE}" ] || fail "The password file at [${DOCKER_STEPCA_INIT_PASSWORD_FILE}] may not be empty."
 		cat "${DOCKER_STEPCA_INIT_PASSWORD_FILE}" | tee "${STEPPATH}/password" > "${STEPPATH}/provisioner_password"
 	elif [ -v DOCKER_STEPCA_INIT_PASSWORD ]; then
-		if [ -z "${DOCKER_STEPCA_INIT_PASSWORD}" ]; then
-			>&2 echo "❌ The password from [${DOCKER_STEPCA_INIT_PASSWORD}] may not be empty."
-			return 1
-		fi
+		[ -n "${DOCKER_STEPCA_INIT_PASSWORD}" ] || fail "The password from [${DOCKER_STEPCA_INIT_PASSWORD}] may not be empty."
 		echo -n "${DOCKER_STEPCA_INIT_PASSWORD}" | tee "${STEPPATH}/password" > "${STEPPATH}/provisioner_password"
 	else
-		>&2 echo "❌ Must provide a pre-set password using either DOCKER_STEPCA_INIT_PASSWORD or DOCKER_STEPCA_INIT_PASSWORD_FILE"
-		return 1
+		fail "Must provide a pre-set password using either DOCKER_STEPCA_INIT_PASSWORD or DOCKER_STEPCA_INIT_PASSWORD_FILE"
 	fi
 	if [ "${DOCKER_STEPCA_INIT_SSH}" == "true" ]; then
 		SETUP_ARGS+=(--ssh)
@@ -216,7 +219,7 @@ function step_ca_init () {
 	NOT_BEFORE="$(date -Isec -u)"
 	NOT_AFTER="$(date -d "5 years" -Isec -u)"
 
-	echo "👉 Creating a stronger root CA..."
+	say "👉 Creating a stronger root CA..."
 	# TODO: Get the CN from the original CA to substitute here?
 	OUT="$(
 		step certificate create \
@@ -229,15 +232,9 @@ function step_ca_init () {
 			--password-file "${STEPPATH}/password" \
 			"${DOCKER_STEPCA_INIT_NAME} Root CA" \
 			"${STEPPATH}/certs/root_ca.crt" "${STEPPATH}/secrets/root_ca_key"
-	)"
-	RC=${?}
-	if [ ${RC} -ne 0 ] ; then
-		echo "❌ Failed to generate the stronger root CA (rc=${?})"
-		echo "${OUT}"
-		exit 1
-	fi
+	)" || fail "Failed to generate the stronger root CA (rc=${?}):\n${OUT}"
 
-	echo "👉 Creating a stronger intermediate CA..."
+	say "👉 Creating a stronger intermediate CA..."
 	# TODO: Get the CN from the original Intermediate CA to substitute here?
 	OUT="$(
    		step certificate create \
@@ -253,20 +250,12 @@ function step_ca_init () {
 			--ca-password-file "${STEPPATH}/password" \
 			"${DOCKER_STEPCA_INIT_NAME} Intermediate CA" \
 			"${STEPPATH}/certs/intermediate_ca.crt" "${STEPPATH}/secrets/intermediate_ca_key"
-	)"
-	RC=${?}
-	if [ ${RC} -ne 0 ] ; then
-		echo "❌ Failed to generate the stronger intermediate CA (rc=${?})"
-		echo "${OUT}"
-		exit 1
-	fi
+	)" || fail "Failed to generate the stronger intermediate CA (rc=${?})"
 
 	echo ""
-	if [ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ]; then
-		echo "👉 Your CA administrative username is: ${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}"
-	fi
-	echo "👉 Your CA administrative password is: $(< "${STEPPATH}/provisioner_password" )"
-	echo "🤫 This will only be displayed once."
+	[ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ] && say "👉 Your CA administrative username is: ${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}"
+	say "👉 Your CA administrative password is: $(< "${STEPPATH}/provisioner_password" )"
+	say "🤫 This will only be displayed once."
 	shred -u "${STEPPATH}/provisioner_password"
 	mv "${STEPPATH}/password" "${PWDPATH}"
 }

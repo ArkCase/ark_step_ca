@@ -4,7 +4,7 @@
 ARG PUBLIC_REGISTRY="public.ecr.aws"
 ARG ARCH="x86_64"
 ARG OS="linux"
-ARG VER="0.24.2"
+ARG VER="0.25.2"
 ARG PKG="step-ca"
 ARG APP_USER="step"
 ARG APP_UID="1000"
@@ -12,7 +12,7 @@ ARG APP_GROUP="${APP_USER}"
 ARG APP_GID="${APP_UID}"
 
 ARG STEP_SRC="https://github.com/smallstep/certificates/releases/download/v${VER}/step-ca_${VER}_amd64.rpm"
-ARG STEP_KMS_VER="0.9.1"
+ARG STEP_KMS_VER="0.10.0"
 ARG STEP_KMS_SRC="https://github.com/smallstep/step-kms-plugin/releases/download/v${STEP_KMS_VER}/step-kms-plugin_${STEP_KMS_VER}_amd64.rpm"
 
 ARG BASE_REPO="arkcase/base"
@@ -75,8 +75,8 @@ STOPSIGNAL SIGTERM
 #
 # Set up script and run
 #
-COPY entrypoint reconfigure /
-RUN chmod 755 /entrypoint /reconfigure
+COPY entrypoint reconfigure check-ready /
+RUN chmod 755 /entrypoint /reconfigure /check-ready
 
 USER "${APP_USER}"
 HEALTHCHECK CMD /usr/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null
