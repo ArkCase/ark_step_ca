@@ -1,67 +1,36 @@
 #!/bin/bash
-set -eo pipefail
+
+set -eou pipefail
+. /.functions
 
 [ ${#} -ge 1 ] || set -- "1"
 
 STEP_PID="${1}"
 
-[ -v STEPPATH ] || STEPPATH=""
-[ -n "${STEPPATH}" ] || STEPPATH="/app/data"
-
-[ -v READY_TAG ] || READY_TAG=""
-[ -n "${READY_TAG}" ] || READY_TAG="${STEPPATH}/.ready"
-
-timestamp()
-{
-	/usr/bin/date -Ins
-}
-
-say()
-{
-	echo -e "$(timestamp): ${@}"
-}
-
-fail()
-{
-	say "❌ ${@}" 1>&2
-	exit ${EXIT_CODE:-1}
-}
+set_or_default BASE_DIR "/app"
+set_or_default STEPPATH "${BASE_DIR}/data"
+set_or_default READY_TAG "${STEPPATH}/.ready"
 
 # We wait until it's up an listening, for up to 90 seconds, and we also
 # keep watch to see if it crashes
-START="$(/usr/bin/date +%s)"
+START="$(date +%s)"
 MAX_WAIT="90"
-say "👉 Waiting for the daemon to complete its startup (for up to ${MAX_WAIT} seconds)..."
-while true ; do
+doing "Waiting for the daemon to complete its startup (for up to ${MAX_WAIT} seconds)..."
+poll_url "https://localhost:9000/root.pem" "${MAX_WAIT}" 1 || fail "The step-ca daemon died while we waited for it to start up"
+ok "Daemon is up!"
 
-	# If it's up, end the poll
-	/usr/bin/curl -kL https://localhost:9000/root.pem &>/dev/null && break
-
-	# It's not up ... is it still running?
-	kill -0 "${STEP_PID}" &>/dev/null || fail "The step-ca daemon died while we waited for it to start up"
-
-	# It's not up yet, but still running ... have we timed out?
-	NOW="$(/usr/bin/date +%s)"
-	[ $(( NOW - START )) -lt 90 ] || fail "The step-ca daemon did not start after ${MAX_WAIT} seconds, failing"
-
-	# It's not up yet, and hasn't timed out, so just sleep
-	sleep 1
-done
-say "\t✅ Daemon is up!"
-
-[ -v DOCKER_STEPCA_INIT_X509_DURATION ] || DOCKER_STEPCA_INIT_X509_DURATION="13140h"
-say "👉 Reconfiguring the default provisioner's certificate duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
-if ! /usr/bin/step ca provisioner update admin --x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" --x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" ; then
+set_or_default DOCKER_STEPCA_INIT_X509_DURATION "13140h"
+doing "Reconfiguring the default provisioner's certificate duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
+step ca provisioner update admin --x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" --x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" || \
 	fail "Failed to reconfigure the X509 duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
-fi
-say "\t✅ Done!"
+ok "Done!"
 
 # TODO: Other reconfigurations?
 
-say "👉 Signaling the step-ca process (pid=${STEP_PID})"
+doing "Signaling the step-ca process (pid=${STEP_PID})"
 kill -HUP "${STEP_PID}" || fail "Failed to send the HUP signal to the step-ca process (pid ${STEP_PID})"
-say "\t✅ Done!"
+ok "Done!"
 
-say "👉 Marking the release as ready with [${READY_TAG}]..."
-/usr/bin/sha256sum "${STEPPATH}/certs/root_ca.crt" > "${READY_TAG}" || fail "Failed to render the readiness tag at [${READY_TAG}]..."
-say "\t✅ Done!"
+doing "Marking the release as ready with [${READY_TAG}]..."
+sha256sum "${STEPPATH}/certs/root_ca.crt" > "${READY_TAG}" || fail "Failed to render the readiness tag at [${READY_TAG}]..."
+ok "Done!"

@@ -1,29 +1,13 @@
 #!/bin/bash
+
 set -eou pipefail
+. /.functions
 
-timestamp()
-{
-	/usr/bin/date -Ins
-}
-
-say()
-{
-	echo -e "$(timestamp): ${@}"
-}
-
-fail()
-{
-	say "❌ ${@}" 1>&2
-	exit ${EXIT_CODE:-1}
-}
-
-[ -v STEPPATH ] || STEPPATH=""
-[ -n "${STEPPATH}" ] || STEPPATH="/app/data"
-
-[ -v READY_TAG ] || READY_TAG=""
-[ -n "${READY_TAG}" ] || READY_TAG="${STEPPATH}/.ready"
+set_or_default BASE_PATH "/app"
+set_or_default STEPPATH "${BASE_PATH}/data"
+set_or_default READY_TAG "${STEPPATH}/.ready"
 
 say "👉 Checking readiness marker..."
-[ -f "${READY_TAG}" ] || fail "Not Ready!"
+is_file "${READY_TAG}" || fail "Not Ready!"
 say "\t✅ Ready!"
 exit 0
