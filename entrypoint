@@ -54,6 +54,7 @@ if [ ! -v DOCKER_STEPCA_INIT_DNS_NAMES ] || [ "${DOCKER_STEPCA_INIT_DNS_NAMES,,}
 
 		# We're in K8s, so proceed accordingly
 		FQDN="$(/usr/bin/hostname -f)"
+		FQSN=""
 		IFS="." read POD SERVICE NAMESPACE SVC CLUSTER_DOMAIN <<< "${FQDN}"
 
 		NAMES=()
@@ -169,13 +170,16 @@ step_ca_init()
 	else
 		fail "Must provide a pre-set password using either DOCKER_STEPCA_INIT_PASSWORD or DOCKER_STEPCA_INIT_PASSWORD_FILE"
 	fi
-	if [ "${DOCKER_STEPCA_INIT_SSH}" == "true" ]; then
+	set_as_boolean DOCKER_STEPCA_INIT_SSH
+	if "${DOCKER_STEPCA_INIT_SSH}"; then
 		SETUP_ARGS+=(--ssh)
 	fi
-	if [ "${DOCKER_STEPCA_INIT_ACME}" == "true" ]; then
+	set_as_boolean DOCKER_STEPCA_INIT_ACME
+	if "${DOCKER_STEPCA_INIT_ACME}"; then
 		SETUP_ARGS+=(--acme)
 	fi
-	if [ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ]; then
+	set_as_boolean DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT
+	if "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}"; then
 		SETUP_ARGS+=(--remote-management)
 		SETUP_ARGS+=(--admin-subject "${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}")
 	fi
