@@ -76,7 +76,7 @@ if [ ! -v DOCKER_STEPCA_INIT_DNS_NAMES ] || [ "${DOCKER_STEPCA_INIT_DNS_NAMES,,}
 			NAMES+=("${DOCKER_STEPCA_INIT_SERVICE_NAME}")
 			SVC_VAR="${DOCKER_STEPCA_INIT_SERVICE_NAME^^}_SERVICE_HOST"
 			if [ -v "${SVC_VAR}" ] ; then
-				SVC_IP="$(validate_ipv4 "${!SVC_VAR}")" && [ "${SVC_IP}" != "127.0.01" ] && NAMES+=("${SVC_IP}")
+				SVC_IP="$(is_valid_ipv4 "${!SVC_VAR}")" && [ "${SVC_IP}" != "127.0.0.1" ] && NAMES+=("${SVC_IP}")
 			fi
 		fi
 
@@ -100,7 +100,7 @@ if [ ! -v DOCKER_STEPCA_INIT_DNS_NAMES ] || [ "${DOCKER_STEPCA_INIT_DNS_NAMES,,}
 			)
 			SVC_VAR="${SERVICE^^}_SERVICE_HOST"
 			if [ -v "${SVC_VAR}" ] ; then
-				SVC_IP="$(validate_ipv4 "${!SVC_VAR}")" && [ "${SVC_IP}" != "127.0.01" ] && NAMES+=("${SVC_IP}")
+				SVC_IP="$(is_valid_ipv4 "${!SVC_VAR}")" && [ "${SVC_IP}" != "127.0.0.1" ] && NAMES+=("${SVC_IP}")
 			fi
 		fi
 
@@ -111,7 +111,7 @@ if [ ! -v DOCKER_STEPCA_INIT_DNS_NAMES ] || [ "${DOCKER_STEPCA_INIT_DNS_NAMES,,}
 		)
 
 		if [ -v POD_IP ] ; then
-			POD_IP="$(validate_ipv4 "${PID_IP}")" && [ "${POD_IP}" != "127.0.01" ] && NAMES+=("${POD_IP}")
+			POD_IP="$(is_valid_ipv4 "${POD_IP}")" && [ "${POD_IP}" != "127.0.0.1" ] && NAMES+=("${POD_IP}")
 		fi
 		NAMES+=("127.0.0.1")
 
