@@ -16,7 +16,7 @@ set_or_default READY_TAG "${STEPPATH}/.ready"
 START="$(date +%s)"
 MAX_WAIT="90"
 doing "Waiting for the daemon to complete its startup (for up to ${MAX_WAIT} seconds)..."
-poll_url_insecure "https://localhost:9000/root.pem" "${MAX_WAIT}" 1 || fail "The step-ca daemon died while we waited for it to start up"
+poll_url_insecure "https://localhost:9000/roots.pem" "${MAX_WAIT}" 1 || fail "The step-ca daemon died while we waited for it to start up"
 ok "Daemon is up!"
 
 set_or_default DOCKER_STEPCA_INIT_X509_DURATION "13140h"
