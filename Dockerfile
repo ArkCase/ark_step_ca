@@ -4,7 +4,7 @@
 ARG PUBLIC_REGISTRY="public.ecr.aws"
 ARG ARCH="x86_64"
 ARG OS="linux"
-ARG VER="0.27.2"
+ARG VER="0.27.4"
 ARG PKG="step-ca"
 ARG APP_USER="step"
 ARG APP_UID="1000"
@@ -82,4 +82,4 @@ RUN chmod 755 /entrypoint /reconfigure /check-ready
 
 USER "${APP_USER}"
 HEALTHCHECK CMD /usr/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null
-ENTRYPOINT /entrypoint
+ENTRYPOINT [ "/entrypoint" ]
