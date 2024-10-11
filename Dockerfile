@@ -4,7 +4,7 @@
 ARG PUBLIC_REGISTRY="public.ecr.aws"
 ARG ARCH="x86_64"
 ARG OS="linux"
-ARG VER="0.27.2"
+ARG VER="0.27.4"
 ARG PKG="step-ca"
 ARG APP_USER="step"
 ARG APP_UID="1000"
@@ -15,9 +15,11 @@ ARG STEP_SRC="https://github.com/smallstep/certificates/releases/download/v${VER
 ARG STEP_KMS_VER="0.11.4"
 ARG STEP_KMS_SRC="https://github.com/smallstep/step-kms-plugin/releases/download/v${STEP_KMS_VER}/step-kms-plugin_${STEP_KMS_VER}_amd64.rpm"
 
+ARG BASE_REGISTRY="${PUBLIC_REGISTRY}"
 ARG BASE_REPO="arkcase/base"
 ARG BASE_VER="8"
-ARG BASE_IMG="${PUBLIC_REGISTRY}/${BASE_REPO}:${BASE_VER}"
+ARG BASE_VER_PFX=""
+ARG BASE_IMG="${BASE_REGISTRY}/${BASE_REPO}:${BASE_VER_PFX}${BASE_VER}"
 
 #
 # For actual execution
@@ -80,4 +82,4 @@ RUN chmod 755 /entrypoint /reconfigure /check-ready
 
 USER "${APP_USER}"
 HEALTHCHECK CMD /usr/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null
-ENTRYPOINT /entrypoint
+ENTRYPOINT [ "/entrypoint" ]
