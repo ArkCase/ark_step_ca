@@ -4,7 +4,7 @@
 ARG PUBLIC_REGISTRY="public.ecr.aws"
 ARG ARCH="x86_64"
 ARG OS="linux"
-ARG VER="0.28.6"
+ARG VER="0.28.3"
 ARG PKG="step-ca"
 ARG APP_USER="step"
 ARG APP_UID="1000"
