@@ -16,16 +16,16 @@ join_array()
 # (a repo with no LICENSE.md)
 
 export STEPPATH="$(step path)"
-export CONFIGPATH="${STEPPATH}/config/ca.json"
-export PWDPATH="${STEPPATH}/secrets/password"
+export CONFIG_PATH="${STEPPATH}/config/ca.json"
+export PASSWORD_PATH="${STEPPATH}/secrets/password"
 
-if [ -f "${PWDPATH}" ] ; then
+if [ -f "${PASSWORD_PATH}" ] ; then
 	# Make sure our existing password exactly matches our
 	# incoming password. If they don't, then we must nuke
 	# the existing configurations so we can create new ones
 	# using this new password. Or, perhaps, change the existing
 	# certificate's password?
-	read OLD_PASSWORD REST < <(/usr/bin/sha256sum "${PWDPATH}")
+	read OLD_PASSWORD REST < <(/usr/bin/sha256sum "${PASSWORD_PATH}")
 
 	if [ -v DOCKER_STEPCA_INIT_PASSWORD_FILE ] ; then
 		read NEW_PASSWORD REST < <(/usr/bin/sha256sum "${DOCKER_STEPCA_INIT_PASSWORD_FILE}")
@@ -140,7 +140,7 @@ init_if_possible()
 		[ -v "${VAR}" ] || FAILED+=("${VAR}")
 	done
 
-	[ ${#FAILED[@]} -le 0 ] || fail "There is no config file at [${CONFIGPATH}]; please run step ca init, or provide values for these variables: ${FAILED[@]}"
+	[ ${#FAILED[@]} -le 0 ] || fail "There is no config file at [${CONFIG_PATH}]; please run step ca init, or provide values for these variables: ${FAILED[@]}"
 
 	# Everything is available for initialization
 	step_ca_init "${@}"
@@ -188,28 +188,60 @@ step_ca_init()
 	NOT_BEFORE="$(date -Isec -u)"
 	NOT_AFTER="$(date -d "5 years" -Isec -u)"
 
-	say "👉 Creating a stronger root CA..."
-	# TODO: Get the CN from the original CA to substitute here?
-	OUT="$(
-		step certificate create \
-			--profile root-ca \
-			--kty RSA \
-			--size 4096 \
-			--force \
-			--not-before="${NOT_BEFORE}" \
-			--not-after="${NOT_AFTER}" \
-			--password-file "${STEPPATH}/password" \
-			"${DOCKER_STEPCA_INIT_NAME} Root CA" \
-			"${STEPPATH}/certs/root_ca.crt" "${STEPPATH}/secrets/root_ca_key"
-	)" || fail "Failed to generate the stronger root CA (rc=${?}):\n${OUT}"
+	set_or_default PARENT_CA_CRT
+	set_or_default PARENT_CA_KEY
+	if [ -n "${PARENT_CA_CRT}" ] && [ -n "${PARENT_CA_KEY}" ] && is_file_readable "${PARENT_CA_CRT}" && is_file_readable "${PARENT_CA_KEY}" ; then
+		say "👉 An existing parent CA has been provided and found, using it:"
+		openssl x509 -noout -in "${PARENT_CA_CRT}" -subject -issuer | sed -e 's;^;\t;g'
 
-	say "👉 Creating a stronger intermediate CA..."
-	# TODO: Get the CN from the original Intermediate CA to substitute here?
+		# Per: https://smallstep.com/docs/tutorials/intermediate-ca-new-ca/index.html#the-secure-way
+		shred -u "${STEPPATH}/certs/root_ca.crt" || fail "Failed to shred the existing CA certificate"
+		cp -vf "${PARENT_CA_CRT}" "${STEPPATH}/certs/root_ca.crt" || \
+			fail "Failed to copy the parent CA from [${PARENT_CA_CRT}] into its final location in [${STEPPATH}/certs]"
+
+		shred -u "${STEPPATH}/secrets/root_ca_key" || fail "Failed to shred the existing CA's key"
+
+		if [ -v PARENT_CA_PASS ] && [ -n "${PARENT_CA_PASS}" ] ; then
+			# Decrypt the incoming key
+			if is_file_readable "${PARENT_CA_PASS}" ; then
+				PARENT_CA_PASS_FILE="$(readlink -f "${PARENT_CA_PASS}")" || fail "Failed to canonicalize the path for the parent CA's password (from [${PARENT_CA_PASS}])"
+				openssl rsa -in "${PARENT_CA_KEY}" -out "${STEPPATH}/secrets/root_ca_key" -passin "file:${PARENT_CA_PASS_FILE}" || fail "Failed to decrypt the parent CA's key"
+			else
+				echo -n "${PARENT_CA_PASS}" | openssl rsa -in "${PARENT_CA_KEY}" -out "${STEPPATH}/secrets/root_ca_key" -passin stdin || fail "Failed to decrypt the parent CA's key"
+			fi
+		else
+			# Copy without decrypting
+			cp -vf "${PARENT_CA_KEY}" "${STEPPATH}/secrets/root_ca_key" || \
+				fail "Failed to copy the parent CA's key from [${PARENT_CA_KEY}] into its final location in [${STEPPATH}/secrets]"
+		fi
+
+		# Re-encrypt, but using our password
+		openssl rsa -aes256 -in "${STEPPATH}/secrets/root_ca_key" -out "${STEPPATH}/secrets/root_ca_key.enc" -passout "file:${STEPPATH}/password"
+		# Replace the unencrypted one with the encrypted one
+		mv -vf "${STEPPATH}/secrets/root_ca_key.enc" "${STEPPATH}/secrets/root_ca_key" || \
+			fail "Failed to replace the unencrypted CA's key with the encrypted key"
+	else
+		say "👉 Creating a stronger root CA..."
+		OUT="$(
+			step certificate create \
+				--profile root-ca \
+				--kty RSA \
+				--size 2048 \
+				--force \
+				--not-before="${NOT_BEFORE}" \
+				--not-after="${NOT_AFTER}" \
+				--password-file "${STEPPATH}/password" \
+				"${DOCKER_STEPCA_INIT_NAME} Root CA" \
+				"${STEPPATH}/certs/root_ca.crt" "${STEPPATH}/secrets/root_ca_key"
+		)" || fail "Failed to generate the stronger root CA (rc=${?}):\n${OUT}"
+	fi
+
+	say "👉 Creating an intermediate CA..."
 	OUT="$(
    		step certificate create \
 			--profile intermediate-ca \
 			--kty RSA \
-			--size 4096 \
+			--size 2048 \
 			--force \
 			--not-before="${NOT_BEFORE}" \
 			--not-after="${NOT_AFTER}" \
@@ -219,19 +251,19 @@ step_ca_init()
 			--ca-password-file "${STEPPATH}/password" \
 			"${DOCKER_STEPCA_INIT_NAME} Intermediate CA" \
 			"${STEPPATH}/certs/intermediate_ca.crt" "${STEPPATH}/secrets/intermediate_ca_key"
-	)" || fail "Failed to generate the stronger intermediate CA (rc=${?})"
+	)" || fail "Failed to generate the stronger intermediate CA (rc=${?}):\n${OUT}"
 
 	echo ""
 	[ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ] && say "👉 Your CA administrative username is: ${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}"
 	say "👉 Your CA administrative password is: $(< "${STEPPATH}/provisioner_password" )"
 	say "🤫 This will only be displayed once."
 	shred -u "${STEPPATH}/provisioner_password"
-	mv "${STEPPATH}/password" "${PWDPATH}"
+	mv "${STEPPATH}/password" "${PASSWORD_PATH}"
 }
 
 [ -f /usr/sbin/pcscd ] && /usr/sbin/pcscd
 
-if [ ! -f "${CONFIGPATH}" ] ; then
+if [ ! -f "${CONFIG_PATH}" ] ; then
 	init_if_possible
 
 	# Start the reconfiguration script
@@ -239,4 +271,4 @@ if [ ! -f "${CONFIGPATH}" ] ; then
 fi
 
 # Launch the daemon
-exec /usr/bin/step-ca --password-file "${PWDPATH}" "${CONFIGPATH}"
+exec /usr/bin/step-ca --password-file "${PASSWORD_PATH}" "${CONFIG_PATH}"
