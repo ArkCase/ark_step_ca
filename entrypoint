@@ -188,56 +188,72 @@ step_ca_init()
 	NOT_BEFORE="$(date -Isec -u)"
 	NOT_AFTER="$(date -d "5 years" -Isec -u)"
 
+	set_or_default POD_NAMESPACE
 	set_or_default PARENT_CA_CRT
 	set_or_default PARENT_CA_KEY
+
+	set_or_default KEYBITS 2048
+	[[ "${KEYBITS}" =~ ^[1-9][0-9]*$ ]] || fail "The bit size [${KEYBITS}] is invalid"
+
+	KEY="${STEPPATH}/secrets/root_ca_key"
+	CERT="${STEPPATH}/certs/root_ca.crt"
+	PASS="${STEPPATH}/password"
 	if [ -n "${PARENT_CA_CRT}" ] && [ -n "${PARENT_CA_KEY}" ] && is_file_readable "${PARENT_CA_CRT}" && is_file_readable "${PARENT_CA_KEY}" ; then
 		say "👉 An existing parent CA has been provided and found, using it:"
 		openssl x509 -noout -in "${PARENT_CA_CRT}" -subject -issuer | sed -e 's;^;\t;g'
 
 		# Per: https://smallstep.com/docs/tutorials/intermediate-ca-new-ca/index.html#the-secure-way
-		shred -u "${STEPPATH}/certs/root_ca.crt" || fail "Failed to shred the existing CA certificate"
-		cp -vf "${PARENT_CA_CRT}" "${STEPPATH}/certs/root_ca.crt" || \
-			fail "Failed to copy the parent CA from [${PARENT_CA_CRT}] into its final location in [${STEPPATH}/certs]"
+		shred -u "${CERT}" || fail "Failed to shred the existing CA certificate"
+		cp -vf "${PARENT_CA_CRT}" "${CERT}" || \
+			fail "Failed to copy the parent CA from [${PARENT_CA_CRT}] into its final location in [${CERT}]"
 
-		shred -u "${STEPPATH}/secrets/root_ca_key" || fail "Failed to shred the existing CA's key"
+		shred -u "${KEY}" || fail "Failed to shred the existing CA's key at [${KEY}]"
 
 		if [ -v PARENT_CA_PASS ] && [ -n "${PARENT_CA_PASS}" ] ; then
 			# Decrypt the incoming key
 			if is_file_readable "${PARENT_CA_PASS}" ; then
 				PARENT_CA_PASS_FILE="$(readlink -f "${PARENT_CA_PASS}")" || fail "Failed to canonicalize the path for the parent CA's password (from [${PARENT_CA_PASS}])"
-				openssl rsa -in "${PARENT_CA_KEY}" -out "${STEPPATH}/secrets/root_ca_key" -passin "file:${PARENT_CA_PASS_FILE}" || fail "Failed to decrypt the parent CA's key"
+				openssl rsa -in "${PARENT_CA_KEY}" -out "${KEY}" -passin "file:${PARENT_CA_PASS_FILE}" || fail "Failed to decrypt the parent CA's key"
 			else
-				echo -n "${PARENT_CA_PASS}" | openssl rsa -in "${PARENT_CA_KEY}" -out "${STEPPATH}/secrets/root_ca_key" -passin stdin || fail "Failed to decrypt the parent CA's key"
+				echo -n "${PARENT_CA_PASS}" | openssl rsa -in "${PARENT_CA_KEY}" -out "${KEY}" -passin stdin || fail "Failed to decrypt the parent CA's key"
 			fi
 		else
 			# Copy without decrypting
-			cp -vf "${PARENT_CA_KEY}" "${STEPPATH}/secrets/root_ca_key" || \
-				fail "Failed to copy the parent CA's key from [${PARENT_CA_KEY}] into its final location in [${STEPPATH}/secrets]"
+			cp -vf "${PARENT_CA_KEY}" "${KEY}" || \
+				fail "Failed to copy the parent CA's key from [${PARENT_CA_KEY}] into its final location in [${KEY}]"
 		fi
 
 		# Re-encrypt, but using our password
-		openssl rsa -aes256 -in "${STEPPATH}/secrets/root_ca_key" -out "${STEPPATH}/secrets/root_ca_key.enc" -passout "file:${STEPPATH}/password"
+		openssl rsa -aes256 -in "${KEY}" -out "${KEY}.enc" -passout "file:${PASS}"
 		# Replace the unencrypted one with the encrypted one
-		mv -vf "${STEPPATH}/secrets/root_ca_key.enc" "${STEPPATH}/secrets/root_ca_key" || \
+		mv -vf "${KEY}.enc" "${KEY}" || \
 			fail "Failed to replace the unencrypted CA's key with the encrypted key"
 	else
+		OPENSSL_CONFIG="$(cat <<-EOF
+		[ req ]
+		distinguished_name=dn
+		[ dn ]
+		[ ext ]
+		basicConstraints=critical,CA:TRUE,pathlen:1
+		keyUsage=critical,keyCertSign,cRLSign
+		EOF
+		)"
 		say "👉 Creating a stronger root CA..."
-		OUT="$(
-			step certificate create \
-				--profile root-ca \
-				--kty RSA \
-				--size 2048 \
-				--force \
-				--not-before="${NOT_BEFORE}" \
-				--not-after="${NOT_AFTER}" \
-				--password-file "${STEPPATH}/password" \
-				"${DOCKER_STEPCA_INIT_NAME} Root CA" \
-				"${STEPPATH}/certs/root_ca.crt" "${STEPPATH}/secrets/root_ca_key"
-		)" || fail "Failed to generate the stronger root CA (rc=${?}):\n${OUT}"
+		openssl genrsa -out "${KEY}" -passout "file:${PASS}" ${KEYBITS} || fail "Failed to render a new private key for the CA"
+		openssl req \
+			-new -x509 -nodes \
+			-days 36500 \
+			-key "${KEY}" \
+			-passin "file:${PASS}" \
+			-config <(echo "${OPENSSL_CONFIG}") \
+			-out "${CERT}" \
+			-extensions ext \
+			-subj "/CN=ArkCase Root CA/OU=${POD_NAMESPACE}/" || fail "Failed to render a new CA certificate"
 	fi
 
 	say "👉 Creating an intermediate CA..."
 	OUT="$(
+		set -x
    		step certificate create \
 			--profile intermediate-ca \
 			--kty RSA \
@@ -245,10 +261,10 @@ step_ca_init()
 			--force \
 			--not-before="${NOT_BEFORE}" \
 			--not-after="${NOT_AFTER}" \
-			--password-file "${STEPPATH}/password" \
-			--ca "${STEPPATH}/certs/root_ca.crt" \
-			--ca-key "${STEPPATH}/secrets/root_ca_key" \
-			--ca-password-file "${STEPPATH}/password" \
+			--password-file "${PASS}" \
+			--ca "${CERT}" \
+			--ca-key "${KEY}" \
+			--ca-password-file "${PASS}" \
 			"${DOCKER_STEPCA_INIT_NAME} Intermediate CA" \
 			"${STEPPATH}/certs/intermediate_ca.crt" "${STEPPATH}/secrets/intermediate_ca_key"
 	)" || fail "Failed to generate the stronger intermediate CA (rc=${?}):\n${OUT}"
@@ -258,7 +274,7 @@ step_ca_init()
 	say "👉 Your CA administrative password is: $(< "${STEPPATH}/provisioner_password" )"
 	say "🤫 This will only be displayed once."
 	shred -u "${STEPPATH}/provisioner_password"
-	mv "${STEPPATH}/password" "${PASSWORD_PATH}"
+	mv "${PASS}" "${PASSWORD_PATH}"
 }
 
 [ -f /usr/sbin/pcscd ] && /usr/sbin/pcscd
