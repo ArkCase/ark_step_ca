@@ -13,7 +13,7 @@ ARG APP_GID="${APP_UID}"
 
 ARG STEP_SRC="https://github.com/smallstep/certificates/releases/download/v${VER}/step-ca_amd64.rpm"
 ARG STEP_KMS_VER="0.14.1"
-ARG STEP_KMS_SRC="https://github.com/smallstep/step-kms-plugin/releases/download/v${STEP_KMS_VER}/step-kms-plugin-${STEP_KMS_VER}-1.x86_64.rpm
+ARG STEP_KMS_SRC="https://github.com/smallstep/step-kms-plugin/releases/download/v${STEP_KMS_VER}/step-kms-plugin-${STEP_KMS_VER}-1.x86_64.rpm"
 
 ARG BASE_REGISTRY="${PUBLIC_REGISTRY}"
 ARG BASE_REPO="arkcase/base"
