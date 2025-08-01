@@ -185,8 +185,10 @@ step_ca_init()
 	fi
 	step ca init "${SETUP_ARGS[@]}"
 
-	NOT_BEFORE="$(date -Isec -u)"
-	NOT_AFTER="$(date -d "5 years" -Isec -u)"
+	START_DATE="$(date -u +%s -d "2 hours ago")"
+	NOT_BEFORE="$(date -Isec -u -d "@${START_DATE}")"
+	END_DATE="$(date -u +%s -d "5 years")"
+	NOT_AFTER="$(date -Isec -u -d "@${END_DATE}")"
 
 	set_or_default POD_NAMESPACE
 	set_or_default PARENT_CA_CRT
@@ -229,26 +231,79 @@ step_ca_init()
 		mv -vf "${KEY}.enc" "${KEY}" || \
 			fail "Failed to replace the unencrypted CA's key with the encrypted key"
 	else
-		OPENSSL_CONFIG="$(cat <<-EOF
-		[ req ]
-		distinguished_name=dn
-		[ dn ]
-		[ ext ]
-		basicConstraints=critical,CA:TRUE,pathlen:1
-		keyUsage=critical,keyCertSign,cRLSign
-		EOF
-		)"
-		say "👉 Creating a stronger root CA..."
+		say "👉 Creating a stronger root CA (${KEYBITS} bits)..."
+
+		# First, generate the key
 		openssl genrsa -out "${KEY}" -passout "file:${PASS}" ${KEYBITS} || fail "Failed to render a new private key for the CA"
-		openssl req \
-			-new -x509 -nodes \
-			-days 36500 \
-			-key "${KEY}" \
-			-passin "file:${PASS}" \
-			-config <(echo "${OPENSSL_CONFIG}") \
-			-out "${CERT}" \
-			-extensions ext \
-			-subj "/CN=ArkCase Root CA/OU=${POD_NAMESPACE}/" || fail "Failed to render a new CA certificate"
+
+		# Now, generate a self-signed CA with a start date in the past
+		# to accommodate possible clock skew between nodes
+		(
+			set -euo pipefail
+
+			cleanup()
+			{
+				[ -v TRASH ] && [ -d "${TRASH}" ] && rm -rf "${TRASH}" &>/dev/null
+			}
+
+			TRASH="$(mktemp -d)"
+			trap cleanup EXIT
+			mkdir -p "${TRASH}/certs" "${TRASH}/crls"
+			touch "${TRASH}/index" "${TRASH}/serial"
+
+			OPENSSL_CONFIG="$(cat <<-EOF
+			[ req ]
+			distinguished_name  = dn
+			[ dn ]
+			[ ca ]
+			default_ca          = CA_default
+			[ CA_default ]
+			dir                 = ${TRASH}
+			new_certs_dir       = ${TRASH}/certs
+			crl_dir             = ${TRASH}/crls
+			serial              = ${TRASH}/serial
+			rand_serial         = yes
+			crl                 = ${TRASH}/ca-crl.pem
+			database            = ${TRASH}/index
+			private_key         = ${KEY}
+			certificate         = ${CERT}
+			default_md          = sha256
+			policy              = policy_any
+			[ ext ]
+			basicConstraints    = critical,CA:TRUE,pathlen:1
+			keyUsage            = critical,keyCertSign,cRLSign
+			[ policy_any ]
+			commonName             = supplied
+			countryName            = optional
+			stateOrProvinceName    = optional
+			organizationName       = optional
+			organizationalUnitName = optional
+			emailAddress           = optional
+			EOF
+			)"
+
+			REQ="${TRASH}/ca.csr"
+			SUBJECT="/CN=ArkCase Root CA/OU=${POD_NAMESPACE}/"
+			openssl req \
+				-new \
+				-nodes \
+				-key "${KEY}" \
+				-passin "file:${PASS}" \
+				-subj "${SUBJECT}" \
+				-out "${REQ}" || fail "Failed to render a new CA request"
+
+			openssl ca \
+				-batch \
+				-selfsign \
+				-in "${REQ}" \
+				-config <(echo "${OPENSSL_CONFIG}") \
+				-days 36500 \
+				-noemailDN \
+				-startdate "$(date +"%y%m%d%H%M%SZ" -d "@${START_DATE}")" \
+				-enddate "$(date +"%y%m%d%H%M%SZ" -d "@${END_DATE}")" \
+				-extensions ext \
+				-out "${CERT}" || fail "Failed to self-sign the new CA certificate"
+		) || fail "Failed to render a new CA certificate"
 	fi
 
 	say "👉 Creating an intermediate CA..."
