@@ -66,11 +66,6 @@ RUN groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
 
 WORKDIR "${HOME}"
 
-#
-# Declare some important volumes
-#
-VOLUME [ "${HOME}" ]
-
 EXPOSE 9000
 STOPSIGNAL SIGTERM
 
