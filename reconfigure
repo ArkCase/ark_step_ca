@@ -9,7 +9,7 @@ STEP_PID="${1}"
 
 set_or_default BASE_DIR "/app"
 set_or_default STEPPATH "${BASE_DIR}/data"
-set_or_default READY_TAG "${STEPPATH}/.ready"
+set_or_default READY_TAG "${HOME}/.ready"
 
 # We wait until it's up an listening, for up to 90 seconds, and we also
 # keep watch to see if it crashes

@@ -18,6 +18,7 @@ join_array()
 export STEPPATH="$(step path)"
 export CONFIG_PATH="${STEPPATH}/config/ca.json"
 export PASSWORD_PATH="${STEPPATH}/secrets/password"
+set_or_default READY_TAG "${HOME}/.ready"
 
 if [ -f "${PASSWORD_PATH}" ] ; then
 	# Make sure our existing password exactly matches our
@@ -334,7 +335,12 @@ step_ca_init()
 
 [ -f /usr/sbin/pcscd ] && /usr/sbin/pcscd
 
-if [ ! -f "${CONFIG_PATH}" ] ; then
+ROOT_CA="${STEPPATH}/certs/root_ca.crt"
+if is_file_readable "${ROOT_CA}" && [ -s "${ROOT_CA}" ] ; then
+	# If we're already configured, then mark as ready ...
+	SUM="$(sha256sum "${ROOT_CA}" 2>&1)" || fail "Failed to compute the SHA256 sum for [${ROOT_CA}] (rc=${?}): ${SUM}"
+	echo -n "${SUM}" > "${READY_TAG}" || fail "Failed to render the readiness tag at [${READY_TAG}] (rc=${?})"
+else
 	init_if_possible
 
 	# Start the reconfiguration script
