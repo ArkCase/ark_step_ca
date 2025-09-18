@@ -21,16 +21,15 @@ ok "Daemon is up!"
 
 set_or_default DOCKER_STEPCA_INIT_X509_DURATION "13140h"
 doing "Reconfiguring the default provisioner's certificate duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
-step ca provisioner update admin --x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" --x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" || \
-	fail "Failed to reconfigure the X509 duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
+step ca provisioner update admin \
+	--x509-min-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
+	--x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
+	--x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" || \
+	fail "Failed to reconfigure the X509 durations to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
 ok "Done!"
 
 # TODO: Other reconfigurations?
 
 doing "Signaling the step-ca process (pid=${STEP_PID})"
 kill -HUP "${STEP_PID}" || fail "Failed to send the HUP signal to the step-ca process (pid ${STEP_PID})"
-ok "Done!"
-
-doing "Marking the release as ready with [${READY_TAG}]..."
-sha256sum "${STEPPATH}/certs/root_ca.crt" > "${READY_TAG}" || fail "Failed to render the readiness tag at [${READY_TAG}]..."
 ok "Done!"

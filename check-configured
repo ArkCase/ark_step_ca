@@ -1,0 +1,55 @@
+#!/bin/bash
+
+set -eou pipefail
+. /.functions
+
+set_or_default BASE_PATH "/app"
+set_or_default STEPPATH "${BASE_PATH}/data"
+set_or_default PROVIDER_TYPE "JWK"
+set_or_default PROVIDER_NAME "admin"
+
+#
+# If the daemon is listening, we check through live state.
+#
+# Otherwise, we check the configuration file directly
+#
+doing "Checking if the daemon is listening..."
+if HEALTH="$(step ca health 2>&1)" ; then
+	say "\t✅ Daemon ready!"
+	PROVISIONERS="$(step ca provisioner list 2>&1)" || fail "Failed to get the provisioner details (rc=${?}): ${PROVISIONERS}"
+else
+	CA_JSON="${STEPPATH}/config/ca.json"
+	is_file_readable "${CA_JSON}" || fail "The daemon is not up, and there's no configuration at [${CA_JSON}]"
+	PROVISIONERS="$(jq -r ".authority.provisioners" < "${CA_JSON}" 2>&1)" || fail "Failed to read the config file from [${CA_JSON}] (rc=${?}): ${PROVISIONERS}"
+fi
+
+eyes "Checking the configuration..."
+
+#
+# So we can easily detect null-values
+#
+set_or_default NULL_STR "$(uuidgen)-$(date -Ins)"
+
+#
+# Parse out the important configurations
+#
+CONFIGS="$(jq --arg PROVIDER_TYPE "JWK" --arg PROVIDER_NAME "${PROVIDER_NAME}" --arg NULL "${NULL_STR}" -r '.[] | select((.type == $PROVIDER_TYPE) and (.name == $PROVIDER_NAME)) | [ (.claims.minTLSCertDuration // $NULL), (.claims.defaultTLSCertDuration // $NULL), (.claims.maxTLSCertDuration // $NULL) ] | @tsv' <<< "${PROVISIONERS}" 2>&1)" || fail "Failed to parse the provisioner information (rc=${?}): ${CONFIGS}"
+
+read -r MIN DEF MAX <<< "${CONFIGS}"
+
+#
+# Analyze the obtained values
+#
+[ "${MIN}" == "${NULL_STR}" ] && fail "The minimum certificate duration is not yet configured"
+[ "${DEF}" == "${NULL_STR}" ] && fail "The default certificate duration is not yet configured"
+[ "${MAX}" == "${NULL_STR}" ] && fail "The maximum certificate duration is not yet configured"
+
+# Are they valid time-duration strings?
+MIN="$(timestr_to_secs "${MIN:-"0s"}" 2>&1)" || fail "Could not parse the minimum certificate duration (rc=${?}): ${MIN}"
+DEF="$(timestr_to_secs "${DEF:-"0s"}" 2>&1)" || fail "Could not parse the default certificate duration (rc=${?}): ${DEF}"
+MAX="$(timestr_to_secs "${MAX:-"0s"}" 2>&1)" || fail "Could not parse the maximum certificate duration (rc=${?}): ${MAX}"
+
+# This is all we really care about
+
+say "\t✅ Ready!"
+exit 0

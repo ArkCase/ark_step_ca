@@ -72,8 +72,9 @@ STOPSIGNAL SIGTERM
 #
 # Set up script and run
 #
-COPY entrypoint reconfigure check-ready /
-RUN chmod 755 /entrypoint /reconfigure /check-ready
+COPY entrypoint /
+COPY reconfigure check-ready check-configured /usr/local/bin/
+RUN chmod 755 /entrypoint /usr/local/bin/reconfigure /usr/local/bin/check-ready /usr/local/bin/check-configured
 
 USER "${APP_USER}"
 HEALTHCHECK CMD /usr/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null

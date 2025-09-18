@@ -4,6 +4,11 @@ set -eou pipefail
 . /.functions
 define_base_vars
 
+cleanup()
+{
+	[ -v DAEMON_PID ] && kill -TERM "${DAEMON_PID}" &>/dev/null
+}
+
 join_array()
 {
 	local IFS="${1}"
@@ -18,7 +23,6 @@ join_array()
 export STEPPATH="$(step path)"
 export CONFIG_PATH="${STEPPATH}/config/ca.json"
 export PASSWORD_PATH="${STEPPATH}/secrets/password"
-set_or_default READY_TAG "${HOME}/.ready"
 
 if [ -f "${PASSWORD_PATH}" ] ; then
 	# Make sure our existing password exactly matches our
@@ -337,15 +341,49 @@ step_ca_init()
 
 ROOT_CA="${STEPPATH}/certs/root_ca.crt"
 if is_file_readable "${ROOT_CA}" && [ -s "${ROOT_CA}" ] ; then
-	# If we're already configured, then mark as ready ...
 	SUM="$(sha256sum "${ROOT_CA}" 2>&1)" || fail "Failed to compute the SHA256 sum for [${ROOT_CA}] (rc=${?}): ${SUM}"
-	echo -n "${SUM}" > "${READY_TAG}" || fail "Failed to render the readiness tag at [${READY_TAG}] (rc=${?})"
 else
 	init_if_possible
-
-	# Start the reconfiguration script
-	"${__BASEDIR}/reconfigure" $$ & disown
 fi
 
-# Launch the daemon
-exec /usr/bin/step-ca --password-file "${PASSWORD_PATH}" "${CONFIG_PATH}"
+#
+# This is the daemon command
+#
+CMD=( /usr/bin/step-ca --password-file "${PASSWORD_PATH}" "${CONFIG_PATH}" )
+
+#
+# If we're fully configured, then we exec() into Step-CA
+#
+if check-configured &>/dev/null ; then
+	ok "The instance is fully configured! The daemon will run in the foreground"
+	exec "${CMD[@]}"
+fi
+
+#
+# If we're not fully configured, some black magic is required
+#
+# We use coproc b/c it lets us run the daemon in the background
+# in a controlled fashion with full access to everything. The
+# redirects are meant to facilitate the command's output being
+# piped to our STDOUT directly
+#
+warn "The instance is not yet fully configured"
+
+running "The daemon will run in the background as a coprocess for this execution"
+exec 7>&1
+coproc "${CMD[@]}" 1>&7 2>&1
+
+export DAEMON_PID="${COPROC_PID}"
+trap cleanup EXIT
+eyes "The daemon is running with pid ${DAEMON_PID}"
+
+#
+# Start the reconfiguration script
+#
+reconfigure "${DAEMON_PID}" || fail "Failed to reconfigure the Step-CA instance"
+
+#
+# Everything's ready! Wait on the Step-CA daemon
+#
+wait "${DAEMON_PID}" || fail "Failed to wait for the Step-CA daemon (pid=${DAEMON_PID}, rc=${?})"
+quit "Execution complete"

@@ -3,15 +3,5 @@
 set -eou pipefail
 . /.functions
 
-set_or_default BASE_PATH "/app"
-set_or_default STEPPATH "${BASE_PATH}/data"
-set_or_default READY_TAG "${HOME}/.ready"
-
-say "👉 Checking if the daemon is listening..."
-HEALTH="$(step ca health 2>&1)" || fail "The daemon doesn't appear to be ready (rc=${?}): ${HEALTH}"
-say "\t✅ Daemon ready!"
-
-say "👉 Checking the readiness marker..."
-is_file "${READY_TAG}" || fail "Not Ready!"
-say "\t✅ Ready!"
-exit 0
+check-configured "${@}" || fail "Step CA configuration is not yet complete"
+quit "Step CA is ready and fully configured!"
