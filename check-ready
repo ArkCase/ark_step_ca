@@ -1,7 +1,0 @@
-#!/bin/bash
-
-set -eou pipefail
-. /.functions
-
-check-configured "${@}" || fail "Step CA configuration is not yet complete"
-quit "Step CA is ready and fully configured!"

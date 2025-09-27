@@ -3,33 +3,86 @@
 set -eou pipefail
 . /.functions
 
-[ ${#} -ge 1 ] || set -- "1"
-
-STEP_PID="${1}"
-
 set_or_default BASE_DIR "/app"
 set_or_default STEPPATH "${BASE_DIR}/data"
-set_or_default READY_TAG "${HOME}/.ready"
+set_or_default CA_JSON "${STEPPATH}/config/ca.json"
 
-# We wait until it's up an listening, for up to 90 seconds, and we also
-# keep watch to see if it crashes
-START="$(date +%s)"
-MAX_WAIT="90"
-doing "Waiting for the daemon to complete its startup (for up to ${MAX_WAIT} seconds)..."
-poll_url_insecure "https://localhost:9000/roots.pem" "${MAX_WAIT}" 1 || fail "The step-ca daemon died while we waited for it to start up"
-ok "Daemon is up!"
+check_durations()
+{
+	local CA_JSON="${1}"
+	local DURATION="${2}"
 
-set_or_default DOCKER_STEPCA_INIT_X509_DURATION "13140h"
-doing "Reconfiguring the default provisioner's certificate duration to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
-step ca provisioner update admin \
-	--x509-min-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
-	--x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
-	--x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" || \
-	fail "Failed to reconfigure the X509 durations to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
-ok "Done!"
+	local NULL_STR="$(uuidgen)-$(date -Ins -u)"
 
-# TODO: Other reconfigurations?
+	local PROVISIONERS=""
+	PROVISIONERS="$(jq -r ".authority.provisioners" < "${CA_JSON}" 2>&1)" || fail "Failed to read the config file from [${CA_JSON}] (rc=${?}): ${PROVISIONERS}"
 
-doing "Signaling the step-ca process (pid=${STEP_PID})"
-kill -HUP "${STEP_PID}" || fail "Failed to send the HUP signal to the step-ca process (pid ${STEP_PID})"
-ok "Done!"
+	set_or_default PROVIDER_TYPE "JWK"
+
+	#
+	# Parse out the important configurations
+	#
+	local CONFIGS=""
+	CONFIGS="$(jq --arg PROVIDER_TYPE "${PROVIDER_TYPE}" --arg PROVIDER_NAME "${PROVIDER_NAME}" --arg NULL "${NULL_STR}" -r '.[] | select((.type == $PROVIDER_TYPE) and (.name == $PROVIDER_NAME)) | [ (.claims.minTLSCertDuration // $NULL), (.claims.defaultTLSCertDuration // $NULL), (.claims.maxTLSCertDuration // $NULL) ] | @tsv' <<< "${PROVISIONERS}" 2>&1)" || fail "Failed to parse the provisioner information (rc=${?}): ${CONFIGS}"
+	CONFIGS=( ${CONFIGS} )
+
+	# All 3 values must match the expected duration value
+	DURATION="$(timestr_to_secs "${DURATION}")"
+	DURATION="$(secs_to_timestr "${DURATION}")"
+	local TIMESTR=""
+	for TIMESTR in "${CONFIGS[@]}" ; do
+		# Convert to a timestring so we can compare apples-to-apples
+		TIMESTR="$(timestr_to_secs "${TIMESTR}")" || return 1
+		TIMESTR="$(secs_to_timestr "${TIMESTR}")" || return 1
+		# Compare to the desired duration value
+		[ "${TIMESTR}" == "${DURATION}" ] || return 1
+	done
+	return 0
+}
+
+configure_durations()
+{
+	local CA_JSON="${1}"
+	set_or_default DOCKER_STEPCA_INIT_X509_DURATION "13140h"
+
+	set_or_default PROVIDER_NAME "admin"
+
+	check_durations "${CA_JSON}" "${DOCKER_STEPCA_INIT_X509_DURATION}" && ok "Certificate durations are properly configured" && return 0
+
+	doing "Reconfiguring the default provisioner's certificate minimum, default, and maximum durations to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
+	step ca provisioner update "${PROVIDER_NAME}" \
+		--x509-min-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
+		--x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
+		--x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" || \
+		fail "Failed to reconfigure the X509 durations to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
+	ok "\tDurations set!"
+	return 0
+}
+
+apply_configurations()
+{
+	local CA_JSON="${1}"
+
+	if ! configure_durations "${CA_JSON}" ; then
+		err "Failed to configure the certificate durations"
+		return 1
+	fi
+
+	# TODO: Other reconfigurations?
+
+	# All done!
+	return 0
+}
+
+
+#
+# If the daemon is listening, we check through live state.
+#
+# Otherwise, we check the configuration file directly
+#
+
+is_file_readable "${CA_JSON}" || fail "There's no configuration file at [${CA_JSON}]"
+
+waiting "Applying any necessary reconfigurations..."
+apply_configurations "${CA_JSON}" || fail "Failed to apply the required configurations"
+ok "Configuration complete!"

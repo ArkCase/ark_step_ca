@@ -331,8 +331,6 @@ step_ca_init()
 
 	echo ""
 	[ "${DOCKER_STEPCA_INIT_REMOTE_MANAGEMENT}" == "true" ] && say "👉 Your CA administrative username is: ${DOCKER_STEPCA_INIT_ADMIN_SUBJECT}"
-	say "👉 Your CA administrative password is: $(< "${STEPPATH}/provisioner_password" )"
-	say "🤫 This will only be displayed once."
 	shred -u "${STEPPATH}/provisioner_password"
 	mv "${PASS}" "${PASSWORD_PATH}"
 }
@@ -347,43 +345,12 @@ else
 fi
 
 #
-# This is the daemon command
-#
-CMD=( /usr/bin/step-ca --password-file "${PASSWORD_PATH}" "${CONFIG_PATH}" )
-
-#
 # If we're fully configured, then we exec() into Step-CA
 #
-if check-configured &>/dev/null ; then
-	ok "The instance is fully configured! The daemon will run in the foreground"
-	exec "${CMD[@]}"
-fi
+reconfigure && ok "The instance is fully configured!" || fail "Failed to reconfigure the Step-CA instance"
 
 #
-# If we're not fully configured, some black magic is required
+# This is the daemon command
 #
-# We use coproc b/c it lets us run the daemon in the background
-# in a controlled fashion with full access to everything. The
-# redirects are meant to facilitate the command's output being
-# piped to our STDOUT directly
-#
-warn "The instance is not yet fully configured"
-
-running "The daemon will run in the background as a coprocess for this execution"
-exec 7>&1
-coproc "${CMD[@]}" 1>&7 2>&1
-
-export DAEMON_PID="${COPROC_PID}"
-trap cleanup EXIT
-eyes "The daemon is running with pid ${DAEMON_PID}"
-
-#
-# Start the reconfiguration script
-#
-reconfigure "${DAEMON_PID}" || fail "Failed to reconfigure the Step-CA instance"
-
-#
-# Everything's ready! Wait on the Step-CA daemon
-#
-wait "${DAEMON_PID}" || fail "Failed to wait for the Step-CA daemon (pid=${DAEMON_PID}, rc=${?})"
-quit "Execution complete"
+running "Launching the daemon"
+exec /usr/bin/step-ca --password-file "${PASSWORD_PATH}" "${CONFIG_PATH}"
