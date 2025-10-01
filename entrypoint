@@ -353,4 +353,4 @@ reconfigure && ok "The instance is fully configured!" || fail "Failed to reconfi
 # This is the daemon command
 #
 running "Launching the daemon"
-exec /usr/bin/step-ca --password-file "${PASSWORD_PATH}" "${CONFIG_PATH}"
+exec /usr/local/bin/step-ca --password-file "${PASSWORD_PATH}" "${CONFIG_PATH}"
