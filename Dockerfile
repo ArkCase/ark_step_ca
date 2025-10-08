@@ -61,7 +61,7 @@ ENV PWDPATH="${STEPPATH}/secrets/password"
 
 RUN groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
     useradd  --system --uid "${APP_UID}" --gid "${APP_GROUP}" --groups "${APP_GROUP}" --create-home --home-dir "${HOME}" "${APP_USER}" && \
-    chown -R g-w,o-rwx "${HOME}"
+    chmod -R g-w,o-rwx "${HOME}"
 
 WORKDIR "${HOME}"
 
