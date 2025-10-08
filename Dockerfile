@@ -19,7 +19,7 @@ ARG STEP_REBUILD_IMG="${STEP_REBUILD_REGISTRY}/${STEP_REBUILD_REPO}:${STEP_REBUI
 
 ARG BASE_REGISTRY="${PUBLIC_REGISTRY}"
 ARG BASE_REPO="arkcase/base"
-ARG BASE_VER="8"
+ARG BASE_VER="22.04"
 ARG BASE_VER_PFX=""
 ARG BASE_IMG="${BASE_REGISTRY}/${BASE_REPO}:${BASE_VER_PFX}${BASE_VER}"
 
@@ -50,9 +50,6 @@ LABEL MAINTAINER="ArkCase Support <support@arkcase.com>"
 LABEL APP="Step-CA"
 LABEL VERSION="${VER}"
 
-RUN yum -y install epel-release yum-utils && \
-    yum -y clean all
-
 # Install the rebuilt step & step-ca executables
 COPY --chown=root:root --chmod=0755 --from=step /step /step-ca /usr/local/bin/
 
@@ -63,7 +60,8 @@ ENV CONFIGPATH="${STEPPATH}/config/ca.json"
 ENV PWDPATH="${STEPPATH}/secrets/password"
 
 RUN groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
-    useradd  --system --uid "${APP_UID}" --gid "${APP_GROUP}" --groups "${APP_GROUP}" --create-home --home-dir "${HOME}" "${APP_USER}"
+    useradd  --system --uid "${APP_UID}" --gid "${APP_GROUP}" --groups "${APP_GROUP}" --create-home --home-dir "${HOME}" "${APP_USER}" && \
+    chown -R g-w,o-rwx "${HOME}"
 
 WORKDIR "${HOME}"
 
