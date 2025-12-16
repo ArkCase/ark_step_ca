@@ -6,6 +6,19 @@ set -eou pipefail
 set_or_default BASE_DIR "/app"
 set_or_default STEPPATH "${BASE_DIR}/data"
 set_or_default CA_JSON "${STEPPATH}/config/ca.json"
+set_or_default RECONF_ADDX "127.0.0.1:9999"
+
+cleanup()
+{
+	if [ -v RECONF_PID ] ; then
+		eyes "Terminating the temporary Step-CA ( ${RECONF_PID} )"
+		if kill -TERM "${RECONF_PID}" ; then
+			waiting "Awaiting for the process to exit..."
+			wait "${RECONF_PID}" || true
+		fi
+	fi
+	[ -v TEMP_CONF ] && rm -rf "${TEMP_CONF}" &>/dev/null
+}
 
 check_durations()
 {
@@ -43,6 +56,7 @@ check_durations()
 configure_durations()
 {
 	local CA_JSON="${1}"
+	local RECONF_ADDX="${2}"
 	set_or_default DOCKER_STEPCA_INIT_X509_DURATION "13140h"
 
 	set_or_default PROVIDER_NAME "admin"
@@ -51,6 +65,7 @@ configure_durations()
 
 	doing "Reconfiguring the default provisioner's certificate minimum, default, and maximum durations to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
 	step ca provisioner update "${PROVIDER_NAME}" \
+		--ca-url "https://${RECONF_ADDX}" \
 		--x509-min-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
 		--x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
 		--x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" || \
@@ -61,9 +76,7 @@ configure_durations()
 
 apply_configurations()
 {
-	local CA_JSON="${1}"
-
-	if ! configure_durations "${CA_JSON}" ; then
+	if ! configure_durations "${@}" ; then
 		err "Failed to configure the certificate durations"
 		return 1
 	fi
@@ -84,5 +97,16 @@ apply_configurations()
 is_file_readable "${CA_JSON}" || fail "There's no configuration file at [${CA_JSON}]"
 
 waiting "Applying any necessary reconfigurations..."
-apply_configurations "${CA_JSON}" || fail "Failed to apply the required configurations"
-ok "Configuration complete!"
+
+# Make sure we clean up after ourselves!
+trap cleanup EXIT
+
+# Launch the daemon using an alternate configuration
+TEMP_CONF="$(mktemp --tmpdir ca-XXXXXXXX.reconfigure.json)"
+cat "${CA_JSON}" | jq -r --arg ADDX "${RECONF_ADDX}" '.address=$ADDX' > "${TEMP_CONF}"
+
+coproc /usr/local/bin/step-ca --password-file "${PASSWORD_PATH}" "${TEMP_CONF}"
+RECONF_PID="${COPROC_PID}"
+
+apply_configurations "${CA_JSON}" "${RECONF_ADDX}" || fail "Failed to apply the required configurations"
+quit "Configuration complete!"
