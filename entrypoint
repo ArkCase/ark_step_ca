@@ -16,6 +16,14 @@ join_array()
 	echo "${*}"
 }
 
+#
+# Enable/disable FIPS
+#
+fips-enabled && FIPS="only" || FIPS="off"
+set_or_default GODEBUG
+GODEBUG+="${GODEBUG:+,}fips140=${FIPS}"
+export GODEBUG
+
 # Paraphrased from:
 # https://github.com/influxdata/influxdata-docker/blob/0d341f18067c4652dfa8df7dcb24d69bf707363d/influxdb/2.0/entrypoint.sh
 # (a repo with no LICENSE.md)
@@ -348,14 +356,6 @@ fi
 # If we're fully configured, then we exec() into Step-CA
 #
 reconfigure && ok "The instance is fully configured!" || fail "Failed to reconfigure the Step-CA instance"
-
-#
-# Enable/disable FIPS
-#
-fips-enabled && FIPS="only" || FIPS="off"
-set_or_default GODEBUG
-GODEBUG+="${GODEBUG:+,}fips140=${FIPS}"
-export GODEBUG
 
 #
 # This is the daemon command
