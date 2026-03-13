@@ -52,9 +52,7 @@ LABEL APP="Step-CA"
 LABEL VERSION="${VER}"
 
 # Install the rebuilt step & step-ca executables
-# TEST: Use the FIPS-compatible executables for everything
-COPY --chown=root:root --chmod=0755 --from=step /step-fips /usr/local/bin/step
-COPY --chown=root:root --chmod=0755 --from=step /step-ca-fips /usr/local/bin/step-ca
+COPY --chown=root:root --chmod=0755 --from=step /step /step-ca /usr/local/bin/
 
 ENV HOME="/app/${APP_USER}"
 ENV STEP="${HOME}"
