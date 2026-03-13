@@ -350,6 +350,14 @@ fi
 reconfigure && ok "The instance is fully configured!" || fail "Failed to reconfigure the Step-CA instance"
 
 #
+# Enable/disable FIPS
+#
+fips-enabled && FIPS="only" || FIPS="off"
+set_or_default GODEBUG
+GODEBUG+="${GODEBUG:+,}fips140=${FIPS}"
+export GODEBUG
+
+#
 # This is the daemon command
 #
 running "Launching the daemon"
