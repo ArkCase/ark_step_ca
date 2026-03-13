@@ -17,12 +17,19 @@ join_array()
 }
 
 #
-# Enable/disable FIPS
+# Configure FIPS
 #
-fips-enabled && FIPS="only" || FIPS="off"
+FIPS="false"
+FIPS_MODE="off"
+fips-enabled && FIPS_MODE="only" && FIPS="true"
+declare -r FIPS
+
+#
+# Propagate FIPS to the GoLang stuff
+#
 set_or_default GODEBUG
-GODEBUG+="${GODEBUG:+,}fips140=${FIPS}"
-export GODEBUG
+GODEBUG+="${GODEBUG:+,}fips140=${FIPS_MODE}"
+export FIPS GODEBUG
 
 # Paraphrased from:
 # https://github.com/influxdata/influxdata-docker/blob/0d341f18067c4652dfa8df7dcb24d69bf707363d/influxdb/2.0/entrypoint.sh
