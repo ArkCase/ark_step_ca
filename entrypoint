@@ -22,20 +22,20 @@ join_array()
 FIPS="false"
 FIPS_MODE="off"
 fips-enabled && FIPS_MODE="only" && FIPS="true"
-declare -r FIPS
+declare -xr FIPS
 
 #
 # Propagate FIPS to the GoLang stuff
 #
 set_or_default GODEBUG
 GODEBUG+="${GODEBUG:+,}fips140=${FIPS_MODE}"
-export FIPS GODEBUG
+export GODEBUG
 
 # Paraphrased from:
 # https://github.com/influxdata/influxdata-docker/blob/0d341f18067c4652dfa8df7dcb24d69bf707363d/influxdb/2.0/entrypoint.sh
 # (a repo with no LICENSE.md)
 
-export STEPPATH="$(step path)"
+export STEPPATH="$(step path 2>&1)" || fail "Failed to compute the STEPPATH value (rc=${?}): ${STEPPATH}"
 export CONFIG_PATH="${STEPPATH}/config/ca.json"
 export PASSWORD_PATH="${STEPPATH}/secrets/password"
 
