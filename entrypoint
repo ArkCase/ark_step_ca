@@ -19,7 +19,7 @@ join_array()
 #
 # Configure FIPS
 #
-set_fips
+set_godebug_fips140
 
 # Paraphrased from:
 # https://github.com/influxdata/influxdata-docker/blob/0d341f18067c4652dfa8df7dcb24d69bf707363d/influxdb/2.0/entrypoint.sh

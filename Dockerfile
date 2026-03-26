@@ -6,24 +6,24 @@ ARG PUBLIC_REGISTRY="public.ecr.aws"
 ARG PRIVATE_REGISTRY
 ARG ARCH="x86_64"
 ARG OS="linux"
-ARG VER="0.29.0"
+ARG VER="0.30.2"
 ARG PKG="step-ca"
 ARG APP_USER="step"
 ARG APP_UID="1000"
 ARG APP_GROUP="${APP_USER}"
 ARG APP_GID="${APP_UID}"
 
-ARG STEP_REGISTRY="${PRIVATE_REGISTRY}"
-ARG STEP_REPO="arkcase/rebuild-step-ca"
-ARG STEP_VER="${VER}"
-ARG STEP_VER_PFX="${BASE_VER_PFX}"
-ARG STEP_IMG="${STEP_REGISTRY}/${STEP_REPO}:${STEP_VER_PFX}${STEP_VER}"
-
 ARG BASE_REGISTRY="${PUBLIC_REGISTRY}"
 ARG BASE_REPO="arkcase/base"
 ARG BASE_VER="24.04"
 ARG BASE_VER_PFX=""
 ARG BASE_IMG="${BASE_REGISTRY}/${BASE_REPO}${FIPS}:${BASE_VER_PFX}${BASE_VER}"
+
+ARG STEP_REGISTRY="${PRIVATE_REGISTRY}"
+ARG STEP_REPO="arkcase/rebuild-step-ca"
+ARG STEP_VER="${VER}"
+ARG STEP_VER_PFX="${BASE_VER_PFX}"
+ARG STEP_IMG="${STEP_REGISTRY}/${STEP_REPO}:${STEP_VER_PFX}${STEP_VER}"
 
 FROM "${STEP_IMG}" AS step
 
@@ -53,7 +53,8 @@ LABEL APP="Step-CA"
 LABEL VERSION="${VER}"
 
 # Install the rebuilt step & step-ca executables
-COPY --chown=root:root --chmod=0755 --from=step /step /step-ca /usr/local/bin/
+COPY --chown=root:root --chmod=0755 --from=step "/step${FIPS}" "/usr/local/bin/step"
+COPY --chown=root:root --chmod=0755 --from=step "/step-ca${FIPS}" "/usr/local/bin/step-ca"
 
 ENV HOME="/app/${APP_USER}"
 ENV STEP="${HOME}"
