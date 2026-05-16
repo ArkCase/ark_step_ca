@@ -1,6 +1,7 @@
 #
 # Basic Parameters
 #
+ARG FIPS=""
 ARG PUBLIC_REGISTRY="public.ecr.aws"
 ARG PRIVATE_REGISTRY
 ARG ARCH="x86_64"
@@ -16,7 +17,7 @@ ARG BASE_REGISTRY="${PUBLIC_REGISTRY}"
 ARG BASE_REPO="arkcase/base"
 ARG BASE_VER="24.04"
 ARG BASE_VER_PFX=""
-ARG BASE_IMG="${BASE_REGISTRY}/${BASE_REPO}:${BASE_VER_PFX}${BASE_VER}"
+ARG BASE_IMG="${BASE_REGISTRY}/${BASE_REPO}${FIPS}:${BASE_VER_PFX}${BASE_VER}"
 
 ARG STEP_REGISTRY="${PRIVATE_REGISTRY}"
 ARG STEP_REPO="arkcase/rebuild-step-ca"
@@ -52,7 +53,8 @@ LABEL APP="Step-CA"
 LABEL VERSION="${VER}"
 
 # Install the rebuilt step & step-ca executables
-COPY --chown=root:root --chmod=0755 --from=step /step /step-ca /usr/local/bin/
+COPY --chown=root:root --chmod=0755 --from=step "/step${FIPS}" "/usr/local/bin/step"
+COPY --chown=root:root --chmod=0755 --from=step "/step-ca${FIPS}" "/usr/local/bin/step-ca"
 
 ENV HOME="/app/${APP_USER}"
 ENV STEP="${HOME}"
