@@ -23,7 +23,7 @@ ARG STEP_REGISTRY="${PRIVATE_REGISTRY}"
 ARG STEP_REPO="arkcase/rebuild-step-ca"
 ARG STEP_VER="${VER}"
 ARG STEP_VER_PFX="${BASE_VER_PFX}"
-ARG STEP_IMG="${STEP_REGISTRY}/${STEP_REPO}:${STEP_VER_PFX}${STEP_VER}"
+ARG STEP_IMG="${STEP_REGISTRY}/${STEP_REPO}${FIPS}:${STEP_VER_PFX}${STEP_VER}"
 
 FROM "${STEP_IMG}" AS step
 
@@ -53,8 +53,7 @@ LABEL APP="Step-CA"
 LABEL VERSION="${VER}"
 
 # Install the rebuilt step & step-ca executables
-COPY --chown=root:root --chmod=0755 --from=step "/step${FIPS}" "/usr/local/bin/step"
-COPY --chown=root:root --chmod=0755 --from=step "/step-ca${FIPS}" "/usr/local/bin/step-ca"
+COPY --chown=root:root --chmod=0755 --from=step / /usr/local/bin/
 
 ENV HOME="/app/${APP_USER}"
 ENV STEP="${HOME}"
