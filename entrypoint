@@ -6,7 +6,9 @@ define_base_vars
 
 cleanup()
 {
+	local RC=${?}
 	[ -v DAEMON_PID ] && kill -TERM "${DAEMON_PID}" &>/dev/null
+	return ${RC}
 }
 
 join_array()
@@ -253,7 +255,9 @@ step_ca_init()
 
 			cleanup()
 			{
+				local RC=${?}
 				[ -v TRASH ] && [ -d "${TRASH}" ] && rm -rf "${TRASH}" &>/dev/null
+				return ${RC}
 			}
 
 			TRASH="$(mktemp -d)"
