@@ -63,9 +63,15 @@ configure_durations()
 
 	check_durations "${CA_JSON}" "${DOCKER_STEPCA_INIT_X509_DURATION}" && ok "Certificate durations are properly configured" && return 0
 
+	local STEP_TEMPLATE_ARGS=()
+	set_or_default STEP_CERTIFICATE_TEMPLATE
+	is_file_readable "${STEP_CERTIFICATE_TEMPLATE}" \
+		&& STEP_TEMPLATE_ARGS=( --x509-template="${STEP_CERTIFICATE_TEMPLATE}" )
+
 	doing "Reconfiguring the default provisioner's certificate minimum, default, and maximum durations to [${DOCKER_STEPCA_INIT_X509_DURATION}]"
 	step ca provisioner update "${PROVIDER_NAME}" \
 		--ca-url "https://${RECONF_ADDX}" \
+		"${STEP_TEMPLATE_ARGS[@]}" \
 		--x509-min-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
 		--x509-default-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" \
 		--x509-max-dur="${DOCKER_STEPCA_INIT_X509_DURATION}" || \

@@ -73,8 +73,11 @@ STOPSIGNAL SIGTERM
 #
 # Set up script and run
 #
-COPY --chown=root:root --chmod=0755 entrypoint /
-COPY --chown=root:root --chmod=0755 reconfigure /usr/local/bin/
+COPY --chown=root:root --chmod=0555 entrypoint /
+COPY --chown=root:root --chmod=0555 reconfigure /usr/local/bin/
+
+ENV STEP_CERTIFICATE_TEMPLATE="/usr/local/etc/default-certificate-template.tpl"
+COPY --chown=root:root --chmod=0444 default-certificate-template.tpl "${STEP_CERTIFICATE_TEMPLATE}"
 
 USER "${APP_USER}"
 HEALTHCHECK CMD /usr/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null
