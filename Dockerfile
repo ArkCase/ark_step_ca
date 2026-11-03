@@ -52,33 +52,26 @@ LABEL MAINTAINER="ArkCase Support <support@arkcase.com>"
 LABEL APP="Step-CA"
 LABEL VERSION="${VER}"
 
-# Install the rebuilt step & step-ca executables
-COPY --chown=root:root --chmod=0755 --from=step / /usr/local/bin/
-
 ENV HOME="/app/${APP_USER}"
 ENV STEP="${HOME}"
 ENV STEPPATH="${STEP}"
 ENV CONFIGPATH="${STEPPATH}/config/ca.json"
 ENV PWDPATH="${STEPPATH}/secrets/password"
 
-RUN groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
+ENV STEP_CERTIFICATE_TEMPLATE="/usr/local/etc/default-certificate-template.tpl"
+
+RUN --mount=type=bind,target=/src \
+    --mount=type=bind,from=step,target=/step \
+    install -o root -g root -m 0755 -t /usr/local/bin /step/* /src/entrypoint /src/reconfigure && \
+    groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
     useradd  --system --uid "${APP_UID}" --gid "${APP_GROUP}" --groups "${APP_GROUP}" --create-home --home-dir "${HOME}" "${APP_USER}" && \
-    chmod -R g-w,o-rwx "${HOME}"
+    chmod -R g-w,o-rwx "${HOME}" && \
+    install -o root -g root -m 0444 /src/default-certificate-template.tpl "${STEP_CERTIFICATE_TEMPLATE}"
 
 WORKDIR "${HOME}"
 
 EXPOSE 9000
 STOPSIGNAL SIGTERM
 
-#
-# Set up script and run
-#
-COPY --chown=root:root --chmod=0555 entrypoint /
-COPY --chown=root:root --chmod=0555 reconfigure /usr/local/bin/
-
-ENV STEP_CERTIFICATE_TEMPLATE="/usr/local/etc/default-certificate-template.tpl"
-COPY --chown=root:root --chmod=0444 default-certificate-template.tpl "${STEP_CERTIFICATE_TEMPLATE}"
-
 USER "${APP_USER}"
 HEALTHCHECK CMD /usr/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null
-ENTRYPOINT [ "/entrypoint" ]
