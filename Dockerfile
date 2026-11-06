@@ -63,8 +63,8 @@ ENV STEP_CERTIFICATE_TEMPLATE="/usr/local/etc/default-certificate-template.tpl"
 ENV SSL_INIT_DEFERRED="true"
 RUN --mount=type=bind,target=/src \
     --mount=type=bind,from=step,target=/step \
-    install -o root -g root -m 0755 -t /usr/local/bin /step/* /src/reconfigure && \
-    install -o root -g root -m 0755 /src/entrypoint /usr/local/bin && \
+    install -o root -g root -m 0755 -t /usr/local/bin /step/* && \
+    install -o root -g root -m 0555 -t /usr/local/bin /src/reconfigure /src/entrypoint && \
     groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
     useradd  --system --uid "${APP_UID}" --gid "${APP_GROUP}" --groups "${APP_GROUP}" --create-home --home-dir "${HOME}" "${APP_USER}" && \
     chmod -R g-w,o-rwx "${HOME}" && \
