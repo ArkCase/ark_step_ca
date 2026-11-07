@@ -68,7 +68,9 @@ RUN --mount=type=bind,target=/src \
     groupadd --system --gid "${APP_GID}" "${APP_GROUP}" && \
     useradd  --system --uid "${APP_UID}" --gid "${APP_GROUP}" --groups "${APP_GROUP}" --create-home --home-dir "${HOME}" "${APP_USER}" && \
     chmod -R g-w,o-rwx "${HOME}" && \
-    install -o root -g root -m 0444 /src/default-certificate-template.tpl "${STEP_CERTIFICATE_TEMPLATE}"
+    install -o root -g root -m 0444 /src/default-certificate-template.tpl "${STEP_CERTIFICATE_TEMPLATE}" && \
+    chown -R "${APP_USER}:${APP_GROUP}" "${TEMP_DIR}" && \
+    chmod -R u=rwX,g=rX,o= "${TEMP_DIR}"
 
 WORKDIR "${HOME}"
 
