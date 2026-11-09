@@ -78,4 +78,4 @@ EXPOSE 9000
 STOPSIGNAL SIGTERM
 
 USER "${APP_USER}"
-HEALTHCHECK CMD /usr/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null
+HEALTHCHECK CMD /usr/local/bin/step ca health 2>/dev/null | /usr/bin/grep -i "^ok" >/dev/null
